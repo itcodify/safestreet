@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SafeStreet — Mumbai Monsoon Flood Risk Advisor</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+  :root {
+    --sky-deep:#0d1b2e; --sky-mid:#16293f; --sky-card:#1c3350; --sky-card2:#203a5c;
+    --rain-teal:#4fd1c5; --caution-amber:#f4b350; --danger-coral:#ef6a5a;
+    --text-bright:#eef4f9; --text-dim:#9fb2c7;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:linear-gradient(180deg,var(--sky-deep),var(--sky-mid)); font-family:'Inter',sans-serif; color:var(--text-bright); min-height:100vh; padding:32px 24px 80px; }
+  .wrap { max-width:1160px; margin:0 auto; }
+  h1 { font-family:'Space Grotesk',sans-serif; font-size:38px; font-weight:700; margin-bottom:10px; }
+  .eyebrow { font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--rain-teal); margin-bottom:10px; }
+  header p.sub { color:var(--text-dim); font-size:15px; max-width:620px; margin-bottom:26px; }
+  .tabs { display:flex; gap:6px; margin-bottom:22px; border-bottom:1px solid rgba(255,255,255,.08); overflow-x:auto; }
+  .tab { font-family:'JetBrains Mono',monospace; font-size:13px; padding:10px 18px; color:var(--text-dim); cursor:pointer; border-bottom:2px solid transparent; text-transform:uppercase; white-space:nowrap; }
+  .tab.active { color:var(--rain-teal); border-bottom-color:var(--rain-teal); }
+  .panel { display:none; } .panel.active { display:block; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:16px; margin-bottom:30px; }
+  .card { background:var(--sky-card); border-radius:16px; padding:20px; position:relative; overflow:hidden; }
+  .card .fill { position:absolute; left:0; right:0; bottom:0; height:0%; transition:height .5s; opacity:.22; z-index:0; }
+  .card>* { position:relative; z-index:1; }
+  .ward-name { font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:16px; margin-bottom:4px; }
+  .ward-meta { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-dim); margin-bottom:14px; display:flex; justify-content:space-between; }
+  .risk-row { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px; }
+  .risk-score { font-family:'Space Grotesk',sans-serif; font-size:28px; font-weight:700; }
+  .risk-label { font-family:'JetBrains Mono',monospace; font-size:11px; text-transform:uppercase; padding:3px 9px; border-radius:20px; }
+  .risk-low .risk-label{background:rgba(79,209,197,.18);color:var(--rain-teal);} .risk-low .risk-score{color:var(--rain-teal);}
+  .risk-med .risk-label{background:rgba(244,179,80,.18);color:var(--caution-amber);} .risk-med .risk-score{color:var(--caution-amber);}
+  .risk-high .risk-label{background:rgba(239,106,90,.18);color:var(--danger-coral);} .risk-high .risk-score{color:var(--danger-coral);}
+  .alert-text { font-size:13px; line-height:1.5; }
+  .community-layout { display:grid; grid-template-columns:1.1fr .9fr; gap:20px; }
+  .form-card,.feed-card { background:var(--sky-card); border-radius:16px; padding:24px; }
+  .field { margin-bottom:14px; }
+  .field label { display:block; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-dim); margin-bottom:6px; text-transform:uppercase; }
+  .field select,.field textarea { width:100%; background:var(--sky-mid); border:1px solid rgba(255,255,255,.1); border-radius:8px; color:var(--text-bright); padding:10px 12px; font-family:'Inter',sans-serif; font-size:16px; }
+  .field textarea { resize:vertical; min-height:60px; }
+  .severity-pick { display:flex; gap:8px; }
+  .severity-pick button { flex:1; padding:9px; border-radius:8px; border:1px solid rgba(255,255,255,.1); background:var(--sky-mid); color:var(--text-dim); font-family:'JetBrains Mono',monospace; font-size:11px; cursor:pointer; }
+  .severity-pick button.active { background:var(--rain-teal); color:var(--sky-deep); border-color:var(--rain-teal); }
+  .submit-btn { width:100%; padding:12px; border-radius:10px; border:none; background:var(--rain-teal); color:var(--sky-deep); font-weight:600; font-family:'Space Grotesk',sans-serif; cursor:pointer; font-size:14px; }
+  .feed-item { padding:14px 0; border-bottom:1px solid rgba(255,255,255,.06); }
+  .feed-top { display:flex; justify-content:space-between; margin-bottom:4px; }
+  .feed-ward { font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:14px; }
+  .feed-time { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text-dim); }
+  .feed-sev { font-family:'JetBrains Mono',monospace; font-size:10px; padding:2px 8px; border-radius:12px; text-transform:uppercase; }
+  .chat-shell { background:var(--sky-card); border-radius:16px; display:flex; flex-direction:column; height:520px; }
+  .chat-log { flex:1; overflow-y:auto; padding:24px; display:flex; flex-direction:column; gap:14px; }
+  .msg { max-width:78%; padding:12px 16px; border-radius:14px; font-size:13px; line-height:1.55; }
+  .msg.user { align-self:flex-end; background:var(--rain-teal); color:var(--sky-deep); }
+  .msg.agent { align-self:flex-start; background:var(--sky-card2); }
+  .chat-input-row { display:flex; gap:10px; padding:16px; border-top:1px solid rgba(255,255,255,.06); }
+  .chat-input-row input { flex:1; background:var(--sky-mid); border:1px solid rgba(255,255,255,.1); border-radius:10px; color:var(--text-bright); padding:12px 14px; font-size:16px; }
+  .chat-input-row button { background:var(--rain-teal); color:var(--sky-deep); border:none; border-radius:10px; padding:0 20px; font-weight:600; cursor:pointer; }
+  .note-banner { background:rgba(244,179,80,.1); border:1px solid rgba(244,179,80,.25); color:var(--caution-amber); font-size:12px; padding:10px 14px; border-radius:10px; margin-bottom:16px; font-family:'JetBrains Mono',monospace; }
+  @media (max-width:640px){
+    body{padding:20px 14px 60px;} h1{font-size:26px;}
+    .grid{grid-template-columns:1fr 1fr;} .community-layout{grid-template-columns:1fr;} .chat-shell{height:70vh;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">Live · Real Data · Real Time · No Billing Required</div>
+  <h1>SafeStreet — Monsoon Flood Risk Advisor</h1>
+  <p class="sub">Live rainfall (OpenWeatherMap) + real-time community reports (Firestore, free plan) + a Gemini/ADK assistant reasoning over both.</p>
+
+<div class="console" style="margin-bottom:16px;">
+  <div class="gauge-block">
+    <div class="gauge-label">Check any Mumbai location</div>
+    <input type="text" id="locationSearch" placeholder="e.g. Bandra, Chembur, Powai..." style="width:100%; background:var(--sky-mid); border:1px solid rgba(255,255,255,.1); border-radius:8px; color:var(--text-bright); padding:10px 12px; font-size:16px;">
+  </div>
+</div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="dashboard">Risk Dashboard</div>
+    <div class="tab" data-tab="community">Community Reports</div>
+    <div class="tab" data-tab="agent">Ask the Assistant</div>
+  </div>
+
+  <div class="panel active" id="panel-dashboard">
+    <div class="note-banner" id="rainfallStatus">Loading live rainfall data...</div>
+    <div class="grid" id="cardGrid"></div>
+  </div>
+
+  <div class="panel" id="panel-community">
+    <div class="note-banner">Reports sync in real time via Firestore — open this page in a second tab to see it live.</div>
+    <div class="community-layout">
+      <div class="form-card">
+        <h3 style="margin-bottom:16px;">Report water on your street</h3>
+        <div class="field"><label>Location</label><select id="reportWard"></select></div>
+        <div class="field"><label>Water level</label>
+          <div class="severity-pick" id="severityPick">
+            <button data-sev="ankle" class="active">Ankle-deep</button>
+            <button data-sev="knee">Knee-deep</button>
+            <button data-sev="waist">Waist-deep+</button>
+          </div>
+        </div>
+        <div class="field"><label>Details (optional)</label><textarea id="reportDesc" placeholder="What are you seeing?"></textarea></div>
+        <button class="submit-btn" id="submitReport">Submit report</button>
+      </div>
+      <div class="feed-card"><h3 style="margin-bottom:16px;">Live community feed</h3>
+        <input type="text" id="reportWard" list="wardSuggestions" placeholder="Type any Mumbai location">
+<datalist id="wardSuggestions">
+  <!-- populated by JS below with the curated names, but any text is still accepted -->
+</datalist><div id="feedList"></div></div>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-agent">
+    <div class="note-banner">Connects to your locally running ADK agent (Part F). Start it with: adk api_server agent --port 8080</div>
+    <div class="chat-shell">
+      <div class="chat-log" id="chatLog"></div>
+      <div class="chat-input-row">
+        <input type="text" id="chatInput" placeholder="Ask about any location...">
+        <button id="chatSend">Send</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, addDoc, query, orderBy, limit, onSnapshot, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCSJq3jCNQZlYsvijYQfUYYzygNgqOTUd0",
+  authDomain: "safestreet-64a51.firebaseapp.com",
+  projectId: "safestreet-64a51",
+  storageBucket: "safestreet-64a51.firebasestorage.app",
+  messagingSenderId: "68930510239",
+  appId: "1:68930510239:web:c866d171ad8719403931aa",
+  measurementId: "G-T9D5R0MHWT"
+};
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const OWM_KEY = "d1bba422da8475763a01888a86aae6af";
+
+const LOCATIONS = {
+  "Hindmata (Dadar/Parel)":   { lat: 19.0033, lon: 72.8397, vulnerability: 0.95, drainage_score: 0.15 },
+  "Sion Circle":              { lat: 19.0448, lon: 72.8619, vulnerability: 0.88, drainage_score: 0.20 },
+  "Kurla (Nehru Nagar)":      { lat: 19.0728, lon: 72.8826, vulnerability: 0.85, drainage_score: 0.25 },
+  "Milan Subway (Santacruz)": { lat: 19.0805, lon: 72.8420, vulnerability: 0.90, drainage_score: 0.18 },
+  "Andheri Subway":           { lat: 19.1197, lon: 72.8464, vulnerability: 0.80, drainage_score: 0.30 },
+  "Gandhi Market (Sion)":     { lat: 19.0430, lon: 72.8580, vulnerability: 0.75, drainage_score: 0.35 },
+  "King's Circle":            { lat: 19.0270, lon: 72.8560, vulnerability: 0.65, drainage_score: 0.45 },
+  "Lower Parel":              { lat: 18.9960, lon: 72.8300, vulnerability: 0.55, drainage_score: 0.55 },
+  "Bandra (Kala Nagar)":      { lat: 19.0550, lon: 72.8400, vulnerability: 0.40, drainage_score: 0.65 },
+  "Powai":                    { lat: 19.1176, lon: 72.9060, vulnerability: 0.20, drainage_score: 0.85 },
+};
+const SEV_WEIGHT = { ankle: 0.04, knee: 0.09, waist: 0.16 };
+
+let liveReports = [];
+let liveRainfall = {};
+
+function riskScore(rain, dur, vuln, drainage, boost) {
+  const i = 1 - Math.exp(-rain / 35), d = 1 - Math.exp(-dur / 1.5);
+  return Math.min(Math.max(i * d * (0.4 + 0.6 * vuln) * (1.3 - drainage) + boost, 0), 1);
+}
+function tierOf(s) { return s < 0.35 ? "low" : s < 0.65 ? "med" : "high"; }
+
+// Call OpenWeatherMap directly from the browser — no backend needed
+async function fetchRainfall() {
+  const statusEl = document.getElementById("rainfallStatus");
+  try {
+    const entries = await Promise.all(
+      Object.entries(LOCATIONS).map(async ([name, loc]) => {
+        const url = `https://api.openweathermap.org/data/2.5/weather?lat=${loc.lat}&lon=${loc.lon}&appid=${OWM_KEY}&units=metric`;
+        const res = await fetch(url);
+        const data = await res.json();
+        return [name, { rainfall_mm_hr: data.rain?.["1h"] ?? 0, condition: data.weather?.[0]?.main ?? "Unknown" }];
+      })
+    );
+    liveRainfall = Object.fromEntries(entries);
+    statusEl.textContent = "Live rainfall data loaded from OpenWeatherMap · refreshed every minute";
+  } catch (e) {
+    statusEl.textContent = "Could not load live rainfall — check your OpenWeatherMap key is active (can take up to 2 hrs after signup).";
+  }
+  renderDashboard();
+}
+
+function renderDashboard() {
+  const grid = document.getElementById("cardGrid");
+  grid.innerHTML = "";
+  Object.entries(LOCATIONS).map(([name, loc]) => {
+    const rain = liveRainfall[name]?.rainfall_mm_hr ?? 0;
+    const wardReports = liveReports.filter(r => r.location === name);
+    const boost = wardReports.reduce((s, r) => s + (SEV_WEIGHT[r.severity] || 0), 0);
+    const score = riskScore(rain, 1.0, loc.vulnerability, loc.drainage_score, boost);
+    return { name, score, rain, reportCount: wardReports.length };
+  }).sort((a, b) => b.score - a.score).forEach(loc => {
+    const tier = tierOf(loc.score);
+    const card = document.createElement("div");
+    card.className = `card risk-${tier}`;
+    card.innerHTML = `
+      <div class="fill" style="height:${loc.score*100}%; background:var(--${tier==='low'?'rain-teal':tier==='med'?'caution-amber':'danger-coral'});"></div>
+      <div class="ward-name">${loc.name}</div>
+      <div class="ward-meta"><span>rain: ${loc.rain.toFixed(1)}mm/hr</span>${loc.reportCount ? `<span>${loc.reportCount} report(s)</span>` : ''}</div>
+      <div class="risk-row"><div class="risk-score">${(loc.score*100).toFixed(0)}%</div><div class="risk-label">${tier==='low'?'Low':tier==='med'?'Watch':'High Risk'}</div></div>
+      <div class="alert-text">${tier==='high' ? `Avoid this route — high risk${loc.reportCount?', confirmed by residents':''}.` : tier==='med' ? 'Water collecting — consider an alternate route.' : 'Conditions normal.'}</div>`;
+    grid.appendChild(card);
+  });
+}
+
+function renderFeed() {
+  const feedList = document.getElementById("feedList");
+  feedList.innerHTML = "";
+  liveReports.forEach(r => {
+    const item = document.createElement("div");
+    item.className = "feed-item";
+    const time = r.reported_at?.toDate ? r.reported_at.toDate().toLocaleTimeString() : "just now";
+    item.innerHTML = `<div class="feed-top"><div class="feed-ward">${r.location}</div><div class="feed-time">${time}</div></div>
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:6px;">${r.description || "No details provided."}</div>
+      <span class="feed-sev">${r.severity}-deep</span>`;
+    feedList.appendChild(item);
+  });
+}
+
+// Real-time Firestore listener — fires instantly when ANYONE submits a report
+const reportsQuery = query(collection(db, "community_reports"), orderBy("reported_at", "desc"), limit(50));
+onSnapshot(reportsQuery, snapshot => {
+  liveReports = snapshot.docs.map(d => d.data());
+  renderFeed();
+  renderDashboard();
+});
+
+const reportWardSelect = document.getElementById("reportWard");
+Object.keys(LOCATIONS).forEach(name => {
+  const opt = document.createElement("option"); opt.value = name; opt.textContent = name;
+  reportWardSelect.appendChild(opt);
+});
+let selectedSev = "ankle";
+document.querySelectorAll("#severityPick button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("#severityPick button").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active"); selectedSev = btn.dataset.sev;
+  });
+});
+// Write directly to Firestore from the browser — no backend needed
+document.getElementById("submitReport").addEventListener("click", async () => {
+  await addDoc(collection(db, "community_reports"), {
+    location: reportWardSelect.value,
+    severity: selectedSev,
+    description: document.getElementById("reportDesc").value,
+    reported_at: serverTimestamp(),
+  });
+  document.getElementById("reportDesc").value = "";
+});
+
+document.querySelectorAll(".tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+    tab.classList.add("active");
+    document.getElementById("panel-" + tab.dataset.tab).classList.add("active");
+  });
+});
+
+const chatLog = document.getElementById("chatLog");
+function addMsg(text, from) {
+  const m = document.createElement("div"); m.className = `msg ${from}`; m.textContent = text;
+  chatLog.appendChild(m); chatLog.scrollTop = chatLog.scrollHeight;
+}
+let sessionId = null;
+
+async function ensureSession() {
+  if (sessionId) return sessionId;
+  const res = await fetch("http://localhost:8080/apps/agent/users/demo_user/sessions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  const data = await res.json();
+  sessionId = data.id;
+  return sessionId;
+}
+
+async function askAgent(text) {
+  try {
+    const sid = await ensureSession();
+    const res = await fetch("http://localhost:8080/run_sse", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        appName: "agent",
+        userId: "demo_user",
+        sessionId: sid,
+        newMessage: { role: "user", parts: [{ text }] },
+        streaming: false,
+      }),
+    });
+    const raw = await res.text();
+    // Response comes as SSE lines: "data: {...}\n\n"
+    const lines = raw.split("\n").filter(l => l.startsWith("data: "));
+    let finalText = "No response.";
+    for (const line of lines) {
+      const json = JSON.parse(line.replace("data: ", ""));
+      const t = json?.content?.parts?.[0]?.text;
+      if (t) finalText = t;
+    }
+    return finalText;
+  } catch (e) {
+    return "Couldn't reach the agent — check the terminal running adk api_server for errors.";
+  }
+}
+
+document.getElementById("chatSend").addEventListener("click", async () => {
+  const input = document.getElementById("chatInput");
+  const text = input.value.trim(); if (!text) return;
+  addMsg(text, "user"); input.value = "";
+  addMsg(await askAgent(text), "agent");
+});
+document.getElementById("chatInput").addEventListener("keydown", e => { if (e.key === "Enter") document.getElementById("chatSend").click(); });
+
+addMsg("Hi — I'm your flood risk assistant. Ask about any location.", "agent");
+fetchRainfall();
+setInterval(fetchRainfall, 60000);
+</script>
+</body>
+</html>
