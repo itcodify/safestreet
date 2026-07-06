@@ -3,7 +3,7 @@ from google.adk.agents import Agent
 from google.cloud import firestore
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-from shared.risk_model import compute_risk, SEVERITY_WEIGHT, LOCATIONS
+from shared.risk_model import compute_risk, compute_report_boost, LOCATIONS
 
 os.environ.setdefault("GOOGLE_APPLICATION_CREDENTIALS", os.path.join(os.path.dirname(__file__), "..", "firebase-key.json"))
 fs = firestore.Client()
@@ -18,10 +18,47 @@ def resolve_location(user_input: str) -> str | None:
             return full_name
     return None
 
+def get_rain_duration(lat: float, lon: float) -> float:
+    """Fetches continuous rain duration in hours from Open-Meteo using UTC matching."""
+    try:
+        url = "https://api.open-meteo.com/v1/forecast"
+        params = {
+            "latitude": lat,
+            "longitude": lon,
+            "hourly": "precipitation",
+            "past_days": 1,
+            "timezone": "UTC"
+        }
+        resp = requests.get(url, params=params, timeout=5).json()
+        if "hourly" not in resp or "precipitation" not in resp["hourly"]:
+            return 1.0
+        
+        precip = resp["hourly"]["precipitation"]
+        times = resp["hourly"]["time"]
+        
+        import datetime
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        now_str = now_utc.strftime("%Y-%m-%dT%H:00")
+        
+        try:
+            idx = times.index(now_str)
+        except ValueError:
+            idx = len(times) - 1
+            
+        duration = 0.0
+        for i in range(idx, -1, -1):
+            if precip[i] > 0.1:
+                duration += 1.0
+            else:
+                break
+        return duration if duration > 0 else 0.1
+    except Exception:
+        return 1.0
+
 def get_current_rainfall(location: str) -> dict:
-    """Returns current live rainfall for any Mumbai location.
+    """Returns current live rainfall for any location.
     Args:
-        location: name of the location, e.g. "Sion Circle" or any other Mumbai area
+        location: name of the location
     """
     resolved = resolve_location(location)
     if resolved:
@@ -41,8 +78,12 @@ def get_current_rainfall(location: str) -> dict:
         url = "https://api.openweathermap.org/data/2.5/weather"
         params = {"lat": lat, "lon": lon, "appid": OWM_KEY, "units": "metric"}
         resp = requests.get(url, params=params, timeout=5).json()
+        
+        # Dynamic duration from Open-Meteo
+        duration = get_rain_duration(lat, lon)
+        
         return {"status": "success", "location": location, "rainfall_mm_hr": resp.get("rain", {}).get("1h", 0.0),
-                "duration_hrs": 1.0, "vulnerability": vulnerability, "drainage_score": drainage_score,
+                "duration_hrs": duration, "vulnerability": vulnerability, "drainage_score": drainage_score,
                 "is_curated": resolved is not None}
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -60,7 +101,7 @@ def get_community_reports(location: str) -> dict:
 
 
 def compute_flood_risk(location: str) -> dict:
-    """Computes current flood risk (0-100%) for any Mumbai location.
+    """Computes current flood risk (0-100%) for any location.
     Args:
         location: name of the location to score
     """
@@ -69,7 +110,7 @@ def compute_flood_risk(location: str) -> dict:
         return rain
     resolved_name = rain["location"]
     reports = get_community_reports(resolved_name).get("reports", [])
-    boost = sum(SEVERITY_WEIGHT.get(r.get("severity"), 0) for r in reports)
+    boost = compute_report_boost(reports)
     score = compute_risk(rain["rainfall_mm_hr"], rain["duration_hrs"], rain["vulnerability"], rain["drainage_score"], boost)
     tier = "low" if score < 0.35 else "watch" if score < 0.65 else "high"
     return {"status": "success", "location": resolved_name, "risk_score": round(score * 100, 1),
@@ -93,13 +134,13 @@ def recommend_action(location: str) -> dict:
     return {"status": "success", "recommendation": rec}
 
 def geocode_location(place_name: str) -> dict:
-    """Converts any place name into coordinates, for locations not in our curated hotspot list."""
+    """Converts any place name into global coordinates."""
     try:
         url = "http://api.openweathermap.org/geo/1.0/direct"
-        params = {"q": f"{place_name},Mumbai,IN", "limit": 1, "appid": OWM_KEY}
+        params = {"q": place_name, "limit": 1, "appid": OWM_KEY}
         resp = requests.get(url, params=params, timeout=5).json()
         if not resp:
-            return {"status": "error", "message": f"Couldn't locate '{place_name}' in Mumbai."}
+            return {"status": "error", "message": f"Couldn't locate '{place_name}'."}
         return {"status": "success", "lat": resp[0]["lat"], "lon": resp[0]["lon"]}
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -107,15 +148,15 @@ def geocode_location(place_name: str) -> dict:
 root_agent = Agent(
     model="gemini-2.5-flash",
     name="safestreet_agent",
-    description="Answers questions about Mumbai monsoon flood risk using live rainfall and community reports.",
+    description="Answers questions about flood risk globally using live rainfall and community reports.",
     instruction=(
-        "You are SafeStreet, a calm, direct flood-risk assistant for Mumbai residents. "
+        "You are SafeStreet, a calm, direct flood-risk assistant. "
         "For location-specific questions, use compute_flood_risk and recommend_action. "
         "To find the riskiest area among known hotspots, call compute_flood_risk for each of these and compare: "
         + ", ".join(LOCATIONS.keys()) + ". "
         "If someone asks a general question unrelated to flood risk (small talk, questions about you, "
-        "or anything outside Mumbai flooding), respond briefly and warmly, then gently steer back — "
-        "for example: 'I'm mainly built to help with Mumbai flood risk, but happy to chat — what would you like to know?' "
+        "or anything outside flood risk), respond briefly and warmly, then gently steer back — "
+        "for example: 'I'm mainly built to help with flood risk, but happy to chat — what would you like to know?' "
         "If someone asks whether you're sure about an answer, explain plainly what your answer is based on "
         "(live rainfall data and/or community reports) and its limits — don't just repeat the same answer flatly. "
         "Never respond with nothing — if you're not confident, say so honestly and explain what you'd need to know more. "
