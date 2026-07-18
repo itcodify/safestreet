@@ -112,9 +112,12 @@ def weather_news(q: str = "Mumbai flood monsoon"):
     """Proxies Google News RSS so the frontend can show live weather/flood
     headlines without needing a news-API key. Server-side to avoid browser
     CORS restrictions on the RSS feed."""
+    import logging
     import xml.etree.ElementTree as ET
     from datetime import datetime, timezone, timedelta
     from email.utils import parsedate_to_datetime
+
+    log = logging.getLogger("uvicorn.error")
 
     # Trusted wire services / major outlets — shown ahead of other sources
     # when both are within the freshness window.
@@ -127,11 +130,6 @@ def weather_news(q: str = "Mumbai flood monsoon"):
     MAX_AGE_DAYS = 3  # drop anything older than this — conditions change fast
 
     try:
-        # Google News' RSS search doesn't reliably honor the "when:Xd" query
-        # operator the way regular Google Search does — appending it caused
-        # zero results across the board rather than just filtering by date.
-        # Freshness is instead enforced below by parsing each item's real
-        # pubDate and dropping anything older than MAX_AGE_DAYS.
         r = requests.get(
             "https://news.google.com/rss/search",
             params={"q": q, "hl": "en-IN", "gl": "IN", "ceid": "IN:en"},
@@ -139,10 +137,20 @@ def weather_news(q: str = "Mumbai flood monsoon"):
             headers={"User-Agent": "Mozilla/5.0"},
         )
         if not r.ok:
-            return JSONResponse({"items": []})
+            log.error(f"[/api/news] Google News returned HTTP {r.status_code} for q={q!r}. Body: {r.text[:300]!r}")
+            return JSONResponse({"items": [], "_debug": f"upstream HTTP {r.status_code}"})
 
-        root = ET.fromstring(r.content)
+        try:
+            root = ET.fromstring(r.content)
+        except ET.ParseError as e:
+            # Cloud/datacenter IPs (Render, AWS, GCP, etc.) are frequently served a
+            # CAPTCHA/consent HTML page instead of the RSS feed — this shows up here
+            # as an XML parse failure, not an HTTP error, since r.ok is still True.
+            log.error(f"[/api/news] XML parse failed for q={q!r}: {e}. First 300 chars: {r.text[:300]!r}")
+            return JSONResponse({"items": [], "_debug": f"non-XML response from upstream (likely blocked): {str(e)}"})
+
         raw_items = root.findall("./channel/item")
+        log.info(f"[/api/news] q={q!r} raw item count from Google News: {len(raw_items)}")
 
         def parse_and_filter(max_age_days):
             cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
@@ -170,18 +178,16 @@ def weather_news(q: str = "Mumbai flood monsoon"):
 
         parsed_items = parse_and_filter(MAX_AGE_DAYS)
         if not parsed_items:
-            # Strict 3-day window came up empty (common for smaller/niche
-            # locations with less news volume) — widen rather than show
-            # nothing, still far short of "month-old" stale results.
             parsed_items = parse_and_filter(14)
+        if not parsed_items and raw_items:
+            log.warning(f"[/api/news] q={q!r} had {len(raw_items)} raw items but 0 survived date filtering — check pubDate format")
 
-        # Trusted sources first, then most recent within each group.
         parsed_items.sort(key=lambda x: (not x["_trusted"], -x["_dt"].timestamp()))
-
         items = [{k: v for k, v in i.items() if not k.startswith("_")} for i in parsed_items[:10]]
         return JSONResponse({"items": items})
-    except Exception:
-        return JSONResponse({"items": []})
+    except Exception as e:
+        log.error(f"[/api/news] Unexpected error for q={q!r}: {e!r}")
+        return JSONResponse({"items": [], "_debug": str(e)})
 
 
 @app.get("/api/current-weather")
