@@ -127,12 +127,14 @@ def weather_news(q: str = "Mumbai flood monsoon"):
     MAX_AGE_DAYS = 3  # drop anything older than this — conditions change fast
 
     try:
-        # "when:3d" restricts results to the last 3 days server-side, so we're
-        # not just filtering a mostly-stale, relevance-ranked result set after
-        # the fact (Google News RSS defaults to relevance, not recency).
+        # Google News' RSS search doesn't reliably honor the "when:Xd" query
+        # operator the way regular Google Search does — appending it caused
+        # zero results across the board rather than just filtering by date.
+        # Freshness is instead enforced below by parsing each item's real
+        # pubDate and dropping anything older than MAX_AGE_DAYS.
         r = requests.get(
             "https://news.google.com/rss/search",
-            params={"q": f"{q} when:{MAX_AGE_DAYS}d", "hl": "en-IN", "gl": "IN", "ceid": "IN:en"},
+            params={"q": q, "hl": "en-IN", "gl": "IN", "ceid": "IN:en"},
             timeout=8,
             headers={"User-Agent": "Mozilla/5.0"},
         )
@@ -140,30 +142,38 @@ def weather_news(q: str = "Mumbai flood monsoon"):
             return JSONResponse({"items": []})
 
         root = ET.fromstring(r.content)
-        cutoff = datetime.now(timezone.utc) - timedelta(days=MAX_AGE_DAYS)
-        parsed_items = []
+        raw_items = root.findall("./channel/item")
 
-        for item in root.findall("./channel/item"):
-            pub_raw = (item.findtext("pubDate") or "").strip()
-            try:
-                pub_dt = parsedate_to_datetime(pub_raw)
-                if pub_dt.tzinfo is None:
-                    pub_dt = pub_dt.replace(tzinfo=timezone.utc)
-            except Exception:
-                continue  # skip items with unparseable/missing dates
+        def parse_and_filter(max_age_days):
+            cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
+            out = []
+            for item in raw_items:
+                pub_raw = (item.findtext("pubDate") or "").strip()
+                try:
+                    pub_dt = parsedate_to_datetime(pub_raw)
+                    if pub_dt.tzinfo is None:
+                        pub_dt = pub_dt.replace(tzinfo=timezone.utc)
+                except Exception:
+                    continue
+                if pub_dt < cutoff:
+                    continue
+                source = (item.findtext("source") or "").strip()
+                out.append({
+                    "title": (item.findtext("title") or "").strip(),
+                    "link": (item.findtext("link") or "").strip(),
+                    "source": source,
+                    "pubDate": pub_raw,
+                    "_dt": pub_dt,
+                    "_trusted": source.lower() in TRUSTED_SOURCES,
+                })
+            return out
 
-            if pub_dt < cutoff:
-                continue  # belt-and-suspenders in case when:3d lets one through
-
-            source = (item.findtext("source") or "").strip()
-            parsed_items.append({
-                "title": (item.findtext("title") or "").strip(),
-                "link": (item.findtext("link") or "").strip(),
-                "source": source,
-                "pubDate": pub_raw,
-                "_dt": pub_dt,
-                "_trusted": source.lower() in TRUSTED_SOURCES,
-            })
+        parsed_items = parse_and_filter(MAX_AGE_DAYS)
+        if not parsed_items:
+            # Strict 3-day window came up empty (common for smaller/niche
+            # locations with less news volume) — widen rather than show
+            # nothing, still far short of "month-old" stale results.
+            parsed_items = parse_and_filter(14)
 
         # Trusted sources first, then most recent within each group.
         parsed_items.sort(key=lambda x: (not x["_trusted"], -x["_dt"].timestamp()))
