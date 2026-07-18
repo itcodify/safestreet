@@ -1,66 +1,81 @@
-# SafeStreet: Real-Time Monsoon Flood Risk Platform
+# SafeStreet — Mumbai Monsoon Flood Risk Advisor
 
-## SafeStreet Overview
+Live rainfall + community reports + an ADK/Gemini agent, all served from a single
+FastAPI process so it deploys cleanly as one Render web service.
 
-SafeStreet is a real-time, hyper-local monsoon flood risk assessment and intelligent decision support system. It maps and translates live climate telemetry into actionable, plain-language guidance for commuters and disaster management cells.
+## Deploy to Render
 
-By calculating localized risk using continuous physical variables, SafeStreet provides a transparent, explainable decision channel powered by **Google Cloud Agent Development Kit (ADK)** and **Gemini-2.5-Flash**.
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/itcodify/safestreet)
 
-## 🚀 Key Features
-- **Continuous Rain Duration Tracking:** Reads historical weather streams chronologically backward to calculate exact consecutive hours of downpour to track ground saturation.
-- **Context-Aware Ambiguity Filter:** Detects broad, overlapping text search queries (e.g., "Kurla") and surfaces an interactive sub-location dropdown menu to pin down precise micro-zones.
-- **Interactive Leaflet Map Canvas:** Renders dynamic, real-time circle markers color-coded by continuous hazard tiers: **Green (Safe)**, **Yellow (Watch)**, and **Red (Critical Warning).**
-- **Proximity Emergency Infrastructure Pipeline:** Automatically runs a spatial bounding-box query to map verified medical facilities and hospitals within a tight 1.5km radius of a selected hotspot.
-- **Gemini ADK Agent Workspace:** A natural-language interface that breaks down raw telemetry values into immediate safety advice and routing suggestions.
-- **Emergency Advisory Ticker:** A persistent top-ribbon alert feed replicating critical municipal emergency broadcasts across vulnerable transit corridors.
+1. **Push these changes to GitHub** (they replace your existing files — see
+   "What changed" below).
+2. Click the button above. Render reads `render.yaml` and creates the service
+   automatically (Docker environment, free plan).
+3. When Render asks for environment variables, fill in:
+   | Variable | Where to get it |
+   |---|---|
+   | `GOOGLE_API_KEY` | [Google AI Studio](https://aistudio.google.com/apikey) — create a **new** key, don't reuse the old one |
+   | `OWM_API_KEY` | [OpenWeatherMap → API keys](https://home.openweathermap.org/api_keys) — create a **new** key |
+   | `FIREBASE_CREDENTIALS_JSON` | Firebase Console → Project Settings → Service Accounts → **Generate new private key** → open the downloaded file → paste its entire contents as the value |
 
-## 🛠️ Tech Stack
-- **Language & Backend:** Python 3.11+, Flask / FastAPI
-- **Large Language Model Engine:** Google Vertex AI / Gemini-2.5-Flash
-- **Agent Toolbelt Framework:** Google Cloud Agent Development Kit (ADK)
-- **Spatial Crowdsourced Database:** Google Firestore
-- **Geospatial Mapping Interface:** Leaflet.js, OpenStreetMap Overpass API
+   `GOOGLE_GENAI_USE_VERTEXAI` is already set to `FALSE` in `render.yaml`.
+4. Click **Apply** / **Create Web Service**. First build takes a few minutes.
+5. Once live, open the Render URL — frontend, agent chat, and weather data
+   all come from that one URL.
 
-## 📦 Project Directory Structure
-```plaintext
-safestreet/  
-├── agent.py                 # Google Cloud ADK agent configuration and tool binds  
-├── risk_model.py            # Mathematical risk equations and aggregation logic  
-├── requirements.txt         # Project package dependencies  
-├── firebase-key.json        # Google Cloud service account key for Firestore (Keep Local)  
-├── index.html               # Main dashboard user interface canvas  
-```
+No manual "clickable steps to deploy" beyond that — the blueprint does the
+rest.
 
-## 💻 Terminal Setup & Execution Guide
-To run the application locally, open three separate terminal windows (or tabs) to handle the frontend server, the ADK build process, and the API backend server simultaneously.
+## Why you need new keys (important)
 
-### 1. Initial Setup & Credentials Configuration
-Before spinning up the servers, ensure your local environment variables are configured in your terminal.
-**On Windows (Command Prompt):**
+Rotate all three credentials above before deploying, even if you deploy
+somewhere other than Render:
+
+- `agent/.env` in the uploaded project contained a live Google API key and
+  the path to a Firebase service-account key.
+- `firebase-key.json` contained a live Firebase service-account private key.
+- Both `agent/agent.py` and `frontend/index.html` had an OpenWeatherMap key
+  hardcoded — the frontend one was shipped to every browser that loaded the
+  page, fully visible in page source.
+
+None of these were found in your git history, so they were never pushed
+publicly. But since they've now been shared outside your machine, treat them
+as burned:
+- Google AI Studio → delete the old key, create a new one.
+- OpenWeatherMap → regenerate the key.
+- Firebase Console → Service Accounts → delete the old key, generate a new
+  one (old private keys can't be "changed", only revoked and replaced).
+
+## What changed and why
+
+| File | Problem | Fix |
+|---|---|---|
+| `server.py` (new) | Frontend and agent ran as two separate processes on two ports (5500 + 8080) — Render only exposes one port | Single FastAPI process: mounts the ADK agent, proxies weather calls, and serves the frontend, all on `$PORT` |
+| `Dockerfile` | `RUN adk web agent` at build time is a long-running server command — it hangs the Docker build forever | Removed. Container just installs deps and runs `python server.py` at start |
+| `agent/agent.py` | OpenWeatherMap key hardcoded in source | Reads `OWM_API_KEY` from the environment |
+| `frontend/index.html` | OpenWeatherMap key hardcoded and shipped to every browser; agent URLs pointed at `localhost:8080` | Weather/geocoding calls now go through `/api/weather-alerts` and `/api/geocode` (key stays server-side); agent calls use relative URLs (`/run_sse`, etc.) that work wherever the app is hosted |
+| `firebase-key.json` | Private key file, easy to accidentally commit | Not needed on Render — paste its contents into the `FIREBASE_CREDENTIALS_JSON` env var instead; `server.py` writes it to a temp file at startup. Still gitignored for local dev if you'd rather use a file there |
+| `.env.example` (new) | — | Placeholder template so you know what variables to set without any real secret in the repo |
+
+## Local development
+
 ```bash
-dosset OPENWEATHER_API_KEY="your_openweather_api_key_here"  
-echo GOOGLE_APPLICATION_CREDENTIALS="firebase-key.json"
+pip install -r requirements.txt
+cp .env.example agent/.env   # then fill in your own keys
+# either drop a local firebase-key.json next to server.py (gitignored),
+# or set FIREBASE_CREDENTIALS_JSON in your shell
+python server.py
 ```
 
-### 2. Terminal Window 1: Spin Up the Frontend Host
-Navigate directly to your frontend static files directory and launch a lightweight Python development server on port 5500:
-```bash
-cd frontend  
-python -m http.server 5500
-```
+Open http://localhost:8080 — frontend and agent are both served from there.
 
-### 3. Terminal Window 2: Compile the ADK Web Agent
-In your project workspace root folder, build the agent schema assets via the Google Cloud Agent Development Kit:
-```bash
-adk web agent
-```
+## One more thing worth knowing
 
-### 4. Terminal Window 3: Start the ADK API Backend Server
-Launch the underlying agent logic gateway on port 8080, explicitly authorizing incoming data requests from your running frontend portal:
-```bash
-adk api_server agent --port 8080 --allow_origins http://localhost:5500
-```
-
-## 🌐 Accessing the App
-Once all three terminal modules are actively running, open your web browser and navigate to:
-> [http://localhost:5500](http://localhost:5500)
+The Firebase Web `apiKey` inside `frontend/index.html`'s `firebaseConfig` is
+**not** a secret in the way the others are — Firebase web API keys are
+designed to be public and are meant to be restricted by your Firestore
+Security Rules, not by hiding the key. Since anyone can currently call
+`addDoc` on `community_reports` from the browser, it's worth adding
+Firestore rules (e.g. requiring a plausible `severity` value, rate-limiting,
+or App Check) before this goes beyond a hackathon demo — just flagging it
+for a future pass, not something I've changed here.

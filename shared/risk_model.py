@@ -1,3 +1,4 @@
+import datetime
 import numpy as np
 
 def compute_risk(rainfall_mm_hr: float, duration_hrs: float,
@@ -11,8 +12,33 @@ def compute_risk(rainfall_mm_hr: float, duration_hrs: float,
 
 SEVERITY_WEIGHT = {"ankle": 0.04, "knee": 0.09, "waist": 0.16}
 MAX_REPORT_BOOST = 0.3
+# A community report stops influencing the risk score once it's this old —
+# otherwise a single report from days ago keeps inflating the % forever.
+REPORT_EXPIRY_HOURS = 6
+
+def _report_age_hours(report: dict, now: "datetime.datetime | None" = None) -> float:
+    """Age of a report in hours. Reports with no usable timestamp are treated
+    as expired (age = infinity) rather than counted forever by default."""
+    ts = report.get("reported_at")
+    if ts is None:
+        return float("inf")
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    try:
+        # Firestore's Python client returns tz-aware datetimes for Timestamp fields.
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=datetime.timezone.utc)
+        return (now - ts).total_seconds() / 3600.0
+    except (AttributeError, TypeError):
+        return float("inf")
+
+def recent_reports(reports: list[dict], max_age_hours: float = REPORT_EXPIRY_HOURS,
+                    now: "datetime.datetime | None" = None) -> list[dict]:
+    """Filters out reports older than max_age_hours."""
+    return [r for r in reports if _report_age_hours(r, now) <= max_age_hours]
 
 def compute_report_boost(reports: list[dict]) -> float:
+    """NOTE: expects already-filtered (recent) reports. Use recent_reports()
+    first if the input may contain stale reports."""
     raw = sum(SEVERITY_WEIGHT.get(r.get("severity"), 0) for r in reports)
     return min(raw, MAX_REPORT_BOOST)
 

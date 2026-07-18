@@ -1,3 +1,7 @@
 venv/
 firebase-key.json
 agent/.env
+.env
+__pycache__/
+*.pyc
+.adk/

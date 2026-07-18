@@ -3,12 +3,14 @@ from google.adk.agents import Agent
 from google.cloud import firestore
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-from shared.risk_model import compute_risk, compute_report_boost, LOCATIONS
+from shared.risk_model import compute_risk, compute_report_boost, recent_reports, LOCATIONS
 
 os.environ.setdefault("GOOGLE_APPLICATION_CREDENTIALS", os.path.join(os.path.dirname(__file__), "..", "firebase-key.json"))
 fs = firestore.Client()
 
-OWM_KEY = "d1bba422da8475763a01888a86aae6af"
+OWM_KEY = os.environ.get("OWM_API_KEY", "")
+
+import datetime
 
 def resolve_location(user_input: str) -> str | None:
     """Matches a casual location name like 'Kurla' to the full key like 'Kurla (Nehru Nagar)'."""
@@ -18,42 +20,55 @@ def resolve_location(user_input: str) -> str | None:
             return full_name
     return None
 
-def get_rain_duration(lat: float, lon: float) -> float:
-    """Fetches continuous rain duration in hours from Open-Meteo using UTC matching."""
+def get_rain_duration(lat: float, lon: float) -> float | None:
+    """Continuous rain duration in hours, from Open-Meteo's real hourly history.
+    Returns None (not a fabricated number) if the data genuinely can't be read,
+    so callers can be honest about "unknown" instead of silently showing 1hr
+    everywhere something goes wrong.
+    """
     try:
         url = "https://api.open-meteo.com/v1/forecast"
         params = {
             "latitude": lat,
             "longitude": lon,
             "hourly": "precipitation",
-            "past_days": 1,
-            "timezone": "UTC"
+            "past_days": 2,
+            "forecast_days": 1,
+            "timezone": "UTC",
         }
-        resp = requests.get(url, params=params, timeout=5).json()
-        if "hourly" not in resp or "precipitation" not in resp["hourly"]:
-            return 1.0
-        
-        precip = resp["hourly"]["precipitation"]
-        times = resp["hourly"]["time"]
-        
-        import datetime
+        resp = requests.get(url, params=params, timeout=8).json()
+        hourly = resp.get("hourly") or {}
+        precip, times = hourly.get("precipitation"), hourly.get("time")
+        if not precip or not times:
+            return None
+
         now_utc = datetime.datetime.now(datetime.timezone.utc)
-        now_str = now_utc.strftime("%Y-%m-%dT%H:00")
-        
-        try:
-            idx = times.index(now_str)
-        except ValueError:
-            idx = len(times) - 1
-            
+        # Find the last hourly slot at or before "now" — robust to exact-string
+        # matching quirks, unlike a strict times.index(now_str) lookup.
+        idx = None
+        for i, t in enumerate(times):
+            try:
+                slot = datetime.datetime.fromisoformat(t).replace(tzinfo=datetime.timezone.utc)
+            except ValueError:
+                continue
+            if slot <= now_utc:
+                idx = i
+            else:
+                break
+        if idx is None:
+            return None
+
+        if (precip[idx] or 0) < 0.1:
+            return 0.0  # genuinely not raining right now
         duration = 0.0
         for i in range(idx, -1, -1):
-            if precip[i] > 0.1:
+            if (precip[i] or 0) >= 0.1:
                 duration += 1.0
             else:
                 break
-        return duration if duration > 0 else 0.1
+        return duration
     except Exception:
-        return 1.0
+        return None
 
 def get_current_rainfall(location: str) -> dict:
     """Returns current live rainfall for any location.
@@ -77,25 +92,32 @@ def get_current_rainfall(location: str) -> dict:
     try:
         url = "https://api.openweathermap.org/data/2.5/weather"
         params = {"lat": lat, "lon": lon, "appid": OWM_KEY, "units": "metric"}
-        resp = requests.get(url, params=params, timeout=5).json()
-        
-        # Dynamic duration from Open-Meteo
+        resp = requests.get(url, params=params, timeout=8).json()
+
+        # Dynamic duration from Open-Meteo. None means "couldn't determine it" —
+        # treat as 0 for scoring rather than fabricating a fixed duration.
         duration = get_rain_duration(lat, lon)
-        
+
         return {"status": "success", "location": location, "rainfall_mm_hr": resp.get("rain", {}).get("1h", 0.0),
-                "duration_hrs": duration, "vulnerability": vulnerability, "drainage_score": drainage_score,
+                "duration_hrs": duration if duration is not None else 0.0,
+                "duration_known": duration is not None,
+                "vulnerability": vulnerability, "drainage_score": drainage_score,
                 "is_curated": resolved is not None}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
 def get_community_reports(location: str) -> dict:
-    """Fetches recent citizen-submitted flood reports for a location, from Firestore.
+    """Fetches recent (last few hours) citizen-submitted flood reports for a
+    location, from Firestore. Older reports are excluded so a single stale
+    report can't keep inflating the risk score indefinitely.
     Args:
         location: name of the location to check
     """
     try:
-        docs = fs.collection("community_reports").where("location", "==", location).limit(10).stream()
-        return {"status": "success", "reports": [d.to_dict() for d in docs]}
+        docs = fs.collection("community_reports").where("location", "==", location).limit(20).stream()
+        all_reports = [d.to_dict() for d in docs]
+        fresh = recent_reports(all_reports)
+        return {"status": "success", "reports": fresh, "stale_excluded": len(all_reports) - len(fresh)}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -134,14 +156,19 @@ def recommend_action(location: str) -> dict:
     return {"status": "success", "recommendation": rec}
 
 def geocode_location(place_name: str) -> dict:
-    """Converts any place name into global coordinates."""
+    """Converts any place name into global coordinates. Uses Open-Meteo's
+    free geocoder (no API key, no quota) so global search works reliably
+    regardless of OpenWeatherMap key/quota status.
+    """
     try:
-        url = "http://api.openweathermap.org/geo/1.0/direct"
-        params = {"q": place_name, "limit": 1, "appid": OWM_KEY}
-        resp = requests.get(url, params=params, timeout=5).json()
-        if not resp:
+        url = "https://geocoding-api.open-meteo.com/v1/search"
+        params = {"name": place_name, "count": 1, "language": "en", "format": "json"}
+        resp = requests.get(url, params=params, timeout=8).json()
+        results = resp.get("results") or []
+        if not results:
             return {"status": "error", "message": f"Couldn't locate '{place_name}'."}
-        return {"status": "success", "lat": resp[0]["lat"], "lon": resp[0]["lon"]}
+        r = results[0]
+        return {"status": "success", "lat": r["latitude"], "lon": r["longitude"]}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
