@@ -186,6 +186,9 @@ root_agent = Agent(
         "for example: 'I'm mainly built to help with flood risk, but happy to chat — what would you like to know?' "
         "If someone asks whether you're sure about an answer, explain plainly what your answer is based on "
         "(live rainfall data and/or community reports) and its limits — don't just repeat the same answer flatly. "
+        "If get_current_rainfall returns duration_known: false, the rain-duration data (from Open-Meteo) was "
+        "unavailable — usually because its free daily API limit was hit. Mention this plainly to the user so they "
+        "know the risk % may be less reliable right now, instead of presenting it as a normal confident reading. "
         "Never respond with nothing — if you're not confident, say so honestly and explain what you'd need to know more. "
         "Be concise throughout."
     ),

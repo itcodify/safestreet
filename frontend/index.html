@@ -169,7 +169,7 @@
 <div class="wrap">
   <div class="header-row">
     <div>
-      <div class="eyebrow">Live · Real Data · Real Time · No Billing Required</div>
+      <div class="eyebrow">Live · Real Data · Real Time</div>
       <h1>SafeStreet - Global Flood Risk Advisor</h1>
       <p class="sub">Check flood risk for any place using real hourly rainfall history, alerts, community reports, nearby hospitals, and a Gemini/ADK assistant.</p>
     </div>
@@ -399,6 +399,18 @@ function isReportFresh(report) { return reportAgeHours(report) <= REPORT_EXPIRY_
 let liveReports = [];
 let liveRainfall = {}; // name -> { rainfall_mm_hr, duration_hrs }
 
+// Tracks whether Open-Meteo failed (usually its free-tier daily limit) during
+// the most recent refresh cycle, so we can tell the user their risk % may be
+// based on stale data instead of silently showing numbers as if live.
+let openMeteoIssueDetected = false;
+function updateOpenMeteoStatusBanner() {
+  const statusEl = document.getElementById("rainfallStatus");
+  if (!statusEl) return;
+  statusEl.textContent = openMeteoIssueDetected
+    ? "⚠️ Live rainfall data is temporarily unavailable (Open-Meteo's free API limit has likely been reached for today). Showing the last known readings — risk % below may be outdated until it resets."
+    : "Live rainfall (observed + modeled blend) · refreshed every minute";
+}
+
 function computeReportBoost(reports) {
   const raw = reports.reduce((s, r) => s + (SEV_WEIGHT[r.severity] || 0), 0);
   return Math.min(raw, MAX_REPORT_BOOST);
@@ -505,7 +517,17 @@ const MAX_DURATION_HOURS = 24;
 async function fetchOpenMeteoRain(lat, lon) {
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=precipitation&past_days=2&forecast_days=1&timezone=UTC`;
   const res = await fetch(url);
-  const data = await res.json();
+  let data = {};
+  try { data = await res.json(); } catch (e) { /* fall through, handled below */ }
+  // Open-Meteo returns HTTP 429 (or occasionally a 400 with an "error" body)
+  // once its free-tier daily/minutely request limit is hit. Treat both as a
+  // real failure instead of letting `data.hourly` be undefined further down.
+  if (!res.ok || data.error || !data.hourly) {
+    const reason = data.reason || `HTTP ${res.status}`;
+    const err = new Error(`Open-Meteo request failed: ${reason}`);
+    err.isOpenMeteoLimit = res.status === 429 || /limit/i.test(reason);
+    throw err;
+  }
   const times = data.hourly.time;
   const precip = data.hourly.precipitation;
   const now = new Date();
@@ -530,11 +552,19 @@ async function fetchOpenMeteoRain(lat, lon) {
 // Open-Meteo purely for how many hours it's been going.
 const MAX_OBSERVED_AGE_MINUTES = 45; // OWM readings older than this are treated as stale, not "live"
 
-async function fetchBlendedRain(lat, lon) {
-  const [openMeteo, owm] = await Promise.all([
-    fetchOpenMeteoRain(lat, lon).catch(() => ({ rainfall_mm_hr: 0, duration_hrs: 0.1 })),
+async function fetchBlendedRain(lat, lon, fallback) {
+  const [openMeteoResult, owm] = await Promise.all([
+    fetchOpenMeteoRain(lat, lon)
+      .then(r => ({ ok: true, ...r }))
+      .catch(e => {
+        openMeteoIssueDetected = true;
+        // Prefer the last known reading for this exact spot over a fabricated
+        // zero — a zero here would silently understate flood risk.
+        return { ok: false, rainfall_mm_hr: fallback?.rainfall_mm_hr ?? 0, duration_hrs: fallback?.duration_hrs ?? 0.1 };
+      }),
     fetch(`/api/current-weather?lat=${lat}&lon=${lon}`).then(r => r.json()).catch(() => ({ rainfall_mm_hr: null, age_minutes: null })),
   ]);
+  const openMeteo = openMeteoResult;
   // OWM's snapshot isn't guaranteed to be live-to-the-second — station/satellite
   // updates can lag. Only trust it as "observed" if it's recent; otherwise fall
   // back to the model estimate rather than showing a stale reading as current.
@@ -547,22 +577,24 @@ async function fetchBlendedRain(lat, lon) {
     rainfall_mm_hr: observed !== null ? observed : openMeteo.rainfall_mm_hr,
     duration_hrs: openMeteo.duration_hrs,
     source: observed !== null ? "observed" : "modeled",
+    stale: !openMeteo.ok && observed === null,
   };
 }
 
 async function fetchRainfall() {
-  const statusEl = document.getElementById("rainfallStatus");
+  openMeteoIssueDetected = false; // fresh read each cycle — don't let a past outage stick forever
   const entries = await Promise.all(
     Object.entries(LOCATIONS).map(async ([name, loc]) => {
       try {
-        return [name, await fetchBlendedRain(loc.lat, loc.lon)];
+        return [name, await fetchBlendedRain(loc.lat, loc.lon, liveRainfall[name])];
       } catch (e) {
+        openMeteoIssueDetected = true;
         return [name, liveRainfall[name] || { rainfall_mm_hr: 0, duration_hrs: 0.1 }];
       }
     })
   );
   liveRainfall = Object.fromEntries(entries);
-  statusEl.textContent = "Live rainfall (observed + modeled blend) · refreshed every minute";
+  updateOpenMeteoStatusBanner();
   renderDashboard();
 }
 
@@ -654,7 +686,13 @@ async function fetchGlobalWatchpoints() {
       const durationLabel = rainStatusLabel(r.rainfall_mm_hr, r.duration_hrs);
       const popupHtml = `<strong>${name}</strong><br>${(score*100).toFixed(0)}% est. risk (${tierLabel(tier)})<br>${r.rainfall_mm_hr.toFixed(1)}mm/hr · ${durationLabel}<br><span style="font-size:12px;opacity:.7;">Global watchlist — general estimate only</span>`;
       upsertMapMarker(name, loc.lat, loc.lon, score, tier, popupHtml);
-    } catch (e) { /* skip this point on failure, don't block the rest */ }
+    } catch (e) {
+      // Same Open-Meteo outage/limit as the main dashboard — surface it via
+      // the shared banner too, and leave this marker showing its last known
+      // state rather than erroring the whole map refresh.
+      openMeteoIssueDetected = true;
+      updateOpenMeteoStatusBanner();
+    }
   }));
 }
 
@@ -736,7 +774,8 @@ function renderPicker(candidates, onPick) {
 async function scoreAndShowLocation({ name, lat, lon, vulnerability, drainage_score, isCurated, correctedFrom }) {
   const resultEl = document.getElementById("searchResult");
   resultEl.innerHTML = `<div class="note-banner">Loading rainfall data for "${name}"...</div>`;
-  const r = liveRainfall[name] || await fetchBlendedRain(lat, lon);
+  const r = liveRainfall[name] || await fetchBlendedRain(lat, lon, liveRainfall[name]);
+  if (r.stale) { openMeteoIssueDetected = true; updateOpenMeteoStatusBanner(); }
   const wardReports = liveReports.filter(rep => rep.location.toLowerCase().includes(name.toLowerCase()) && isReportFresh(rep));
   const boost = computeReportBoost(wardReports);
   const score = riskScore(r.rainfall_mm_hr, r.duration_hrs, vulnerability, drainage_score, boost);
@@ -744,9 +783,11 @@ async function scoreAndShowLocation({ name, lat, lon, vulnerability, drainage_sc
   const durationLabel = rainStatusLabel(r.rainfall_mm_hr, r.duration_hrs);
   const sourceNote = r.source === "observed" ? "live station reading" : "modeled estimate — no live station nearby";
   const correctedNote = correctedFrom ? `<div style="font-size:13px;color:var(--text-dim);margin-bottom:8px;">Showing "${name}" — closest match to "${correctedFrom}"</div>` : '';
+  const staleNote = r.stale ? `<div class="note-banner">⚠️ Live rainfall data is temporarily unavailable (Open-Meteo's free API limit has likely been reached). This estimate uses the last known reading and may not reflect current conditions.</div>` : '';
 
   resultEl.innerHTML = `
     ${correctedNote}
+    ${staleNote}
     <div class="card risk-${tier}">
       <div class="fill" style="height:${score*100}%; background:var(--${tierColorVar(tier)});"></div>
       <div class="ward-name">${name}</div>

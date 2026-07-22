@@ -12,5 +12,7 @@ services:
         value: FALSE
       - key: OWM_API_KEY
         sync: false
+      - key: GNEWS_API_KEY
+        sync: false
       - key: FIREBASE_CREDENTIALS_JSON
         sync: false
