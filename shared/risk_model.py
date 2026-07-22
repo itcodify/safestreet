@@ -1,14 +1,53 @@
 import datetime
 import numpy as np
 
+# Hard cap on how much rain "duration" can count for. The old formula had no
+# cap and, combined with a noisy upstream duration read, could receive
+# absurd values (60+ hours) that blew the risk score up regardless of actual
+# current conditions. This mirrors the same cap now enforced in the frontend
+# (frontend/index.html, fetchOpenMeteoRain).
+MAX_DURATION_HOURS = 24.0
+
 def compute_risk(rainfall_mm_hr: float, duration_hrs: float,
                   vulnerability: float, drainage_score: float,
-                  report_boost: float = 0.0) -> float:
-    intensity_factor = 1 - np.exp(-rainfall_mm_hr / 35.0)
-    duration_factor = 1 - np.exp(-duration_hrs / 1.5)
-    base = intensity_factor * duration_factor
-    adjusted = base * (0.4 + 0.6 * vulnerability) * (1.3 - drainage_score)
-    return float(np.clip(adjusted + report_boost, 0, 1))
+                  report_boost: float = 0.0, news_boost: float = 0.0) -> float:
+    """Mirrors frontend/index.html's riskScore() — keep the two in sync.
+
+    Mumbai monsoon flooding happens two different ways: sewers overwhelmed by
+    hours of moderate rain, or a short, heavy downpour outrunning drainage
+    capacity in minutes. cumulative_factor captures the first (rain x
+    duration, i.e. total mm fallen), burst_factor captures the second (a
+    genuinely heavy rain *rate* matters even in its first 15-20 minutes,
+    before it's accumulated much). The final intensity used is whichever
+    signal is higher, so neither a slow multi-hour drizzle nor a short
+    violent burst gets under-scored.
+    """
+    duration_hrs = min(max(duration_hrs, 0.0), MAX_DURATION_HOURS)
+    rainfall_mm_hr = max(rainfall_mm_hr, 0.0)
+
+    cumulative = rainfall_mm_hr * duration_hrs
+    cumulative_factor = 1 - np.exp(-cumulative / 18.0)
+    burst_factor = 1 - np.exp(-rainfall_mm_hr / 20.0)
+    intensity_factor = max(cumulative_factor, burst_factor)
+
+    sustained_factor = 1 - np.exp(-duration_hrs / 5.0)
+    vulnerability_factor = 0.4 + 0.6 * vulnerability   # range 0.4-1.0
+    drainage_factor = 1.3 - 0.6 * drainage_score        # range 0.7-1.3
+
+    base = intensity_factor * (0.6 + 0.4 * sustained_factor) * vulnerability_factor * drainage_factor
+    return float(np.clip(base + report_boost + news_boost, 0, 1))
+
+def rain_intensity_label(rainfall_mm_hr: float) -> str:
+    """Matches frontend/index.html's rainIntensityLabel() bands."""
+    if rainfall_mm_hr < 0.5:
+        return "drizzle"
+    if rainfall_mm_hr < 4:
+        return "light rain"
+    if rainfall_mm_hr < 15:
+        return "moderate rain"
+    if rainfall_mm_hr < 50:
+        return "heavy rain"
+    return "violent rain"
 
 SEVERITY_WEIGHT = {"ankle": 0.04, "knee": 0.09, "waist": 0.16}
 MAX_REPORT_BOOST = 0.3

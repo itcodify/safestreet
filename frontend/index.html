@@ -39,12 +39,12 @@
   .theme-toggle:hover { background:var(--sky-card2); }
   .theme-toggle svg { width:19px; height:19px; }
   header .header-row { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; }
-  * { box-sizing:border-box; padding:0; }
+  * { box-sizing:border-box; margin:0; padding:0; }
   body { background:linear-gradient(180deg,var(--sky-deep),var(--sky-mid)); font-family:'Inter',sans-serif; color:var(--text-bright); min-height:100vh; padding:32px 24px 80px; }
   .wrap { max-width:1160px; margin:0 auto; }
   h1 { font-family:'Space Grotesk',sans-serif; font-size:38px; font-weight:700; margin-bottom:10px; }
   .eyebrow { font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--rain-teal); margin-bottom:10px; }
-  header p.sub { color:var(--text-dim); font-size:15px; max-width:620px; margin-bottom:50px; }
+  header p.sub { color:var(--text-dim); font-size:15px; max-width:620px; margin-bottom:26px; }
   .tabs { display:flex; gap:6px; margin-bottom:22px; border-bottom:1px solid rgba(255,255,255,.08); overflow-x:auto; }
   .tab { font-family:'JetBrains Mono',monospace; font-size:13px; padding:10px 18px; color:var(--text-dim); cursor:pointer; border-bottom:2px solid transparent; text-transform:uppercase; white-space:nowrap; }
   .tab.active { color:var(--rain-teal); border-bottom-color:var(--rain-teal); }
@@ -66,37 +66,44 @@
   .picker-item { padding:12px 14px; border-radius:10px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:10px; }
   .picker-item:hover { background:var(--sky-card2); }
   .picker-item .picker-name { font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:14px; }
-  .picker-item .picker-meta { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text-dim); }
+  .picker-item .picker-meta { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--text-dim); }
 
   .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:16px; margin-bottom:30px; }
   .card { background:var(--sky-card); border-radius:16px; padding:20px; position:relative; overflow:hidden; }
   .card .fill { position:absolute; left:0; right:0; bottom:0; height:0%; transition:height .5s; opacity:.22; z-index:0; }
   .card>* { position:relative; z-index:1; }
   .ward-name { font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:16px; margin-bottom:4px; }
-  .ward-meta { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-dim); margin-bottom:14px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:4px; }
+  .ward-meta { font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--text-dim); margin-bottom:14px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:4px; }
   .risk-row { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px; }
   .risk-score { font-family:'Space Grotesk',sans-serif; font-size:28px; font-weight:700; }
-  .risk-label { font-family:'JetBrains Mono',monospace; font-size:11px; text-transform:uppercase; padding:3px 9px; border-radius:20px; }
+  .risk-label { font-family:'JetBrains Mono',monospace; font-size:13px; text-transform:uppercase; padding:3px 9px; border-radius:20px; }
   .risk-low .risk-label{background:rgba(79,209,197,.18);color:var(--rain-teal);} .risk-low .risk-score{color:var(--rain-teal);}
   .risk-med .risk-label{background:rgba(244,179,80,.18);color:var(--caution-amber);} .risk-med .risk-score{color:var(--caution-amber);}
   .risk-high .risk-label{background:rgba(239,106,90,.18);color:var(--danger-coral);} .risk-high .risk-score{color:var(--danger-coral);}
   .alert-text { font-size:13px; line-height:1.5; }
-  .uncurated-tag { display:inline-block; font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--text-dim); background:rgba(255,255,255,.06); padding:2px 7px; border-radius:10px; margin-top:8px; text-transform:uppercase; }
+  .uncurated-tag { display:inline-block; font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--text-dim); background:rgba(255,255,255,.06); padding:2px 7px; border-radius:10px; margin-top:8px; text-transform:uppercase; }
 
-  .hospital-btn { margin-top:12px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); color:var(--text-bright); padding:8px 12px; border-radius:8px; font-family:'JetBrains Mono',monospace; font-size:11px; cursor:pointer; width:100%; }
+  .hospital-btn { margin-top:12px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); color:var(--text-bright); padding:8px 12px; border-radius:8px; font-family:'JetBrains Mono',monospace; font-size:13px; cursor:pointer; width:100%; }
+  .emergency-card { display:block; text-decoration:none; color:inherit; cursor:pointer; transition:transform .1s, box-shadow .15s; }
+  .emergency-card:hover { transform:translateY(-2px); box-shadow:0 6px 18px rgba(0,0,0,.25); }
+  .emergency-card:active { transform:translateY(0); }
+  .emergency-card .call-hint { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--text-dim); margin-top:8px; }
+  .risk-high .call-hint { color:var(--danger-coral); }
+  .risk-med .call-hint { color:var(--caution-amber); }
+  .risk-low .call-hint { color:var(--rain-teal); }
   .hospital-btn:hover { background:rgba(255,255,255,.12); }
   .hospital-list { margin-top:10px; display:flex; flex-direction:column; gap:6px; }
   .hospital-item { background:rgba(255,255,255,.04); border-radius:8px; padding:8px 10px; font-size:12px; display:flex; justify-content:space-between; gap:8px; }
-  .hospital-item .h-dist { color:var(--rain-teal); font-family:'JetBrains Mono',monospace; font-size:11px; white-space:nowrap; }
+  .hospital-item .h-dist { color:var(--rain-teal); font-family:'JetBrains Mono',monospace; font-size:13px; white-space:nowrap; }
 
   .community-layout { display:grid; grid-template-columns:1.1fr .9fr; gap:20px; }
   .form-card,.feed-card { background:var(--sky-card); border-radius:16px; padding:24px; }
   .field { margin-bottom:14px; }
-  .field label { display:block; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-dim); margin-bottom:6px; text-transform:uppercase; }
+  .field label { display:block; font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--text-dim); margin-bottom:6px; text-transform:uppercase; }
   .field input,.field textarea { width:100%; background:var(--sky-mid); border:1px solid rgba(255,255,255,.1); border-radius:8px; color:var(--text-bright); padding:10px 12px; font-family:'Inter',sans-serif; font-size:16px; }
   .field textarea { resize:vertical; min-height:60px; }
   .severity-pick { display:flex; gap:8px; }
-  .severity-pick button { flex:1; padding:9px; border-radius:8px; border:1px solid rgba(255,255,255,.1); background:var(--sky-mid); color:var(--text-dim); font-family:'JetBrains Mono',monospace; font-size:11px; cursor:pointer; }
+  .severity-pick button { flex:1; padding:9px; border-radius:8px; border:1px solid rgba(255,255,255,.1); background:var(--sky-mid); color:var(--text-dim); font-family:'JetBrains Mono',monospace; font-size:13px; cursor:pointer; }
   .severity-pick button.active { background:var(--rain-teal); color:var(--sky-deep); border-color:var(--rain-teal); }
   .submit-btn { width:100%; padding:12px; border-radius:10px; border:none; background:var(--rain-teal); color:var(--sky-deep); font-weight:600; font-family:'Space Grotesk',sans-serif; cursor:pointer; font-size:14px; }
   .feed-item { padding:14px 0; border-bottom:1px solid rgba(255,255,255,.06); }
@@ -105,11 +112,11 @@
   .news-item { background:var(--sky-card); border-radius:14px; padding:16px 18px; display:block; text-decoration:none; color:inherit; }
   .news-item:hover { background:var(--sky-card2); }
   .news-title { font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:14px; margin-bottom:6px; line-height:1.4; }
-  .news-meta { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text-dim); display:flex; gap:10px; text-transform:uppercase; }
+  .news-meta { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--text-dim); display:flex; gap:10px; text-transform:uppercase; }
   .feed-top { display:flex; justify-content:space-between; margin-bottom:4px; }
   .feed-ward { font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:14px; }
-  .feed-time { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text-dim); }
-  .feed-sev { font-family:'JetBrains Mono',monospace; font-size:10px; padding:2px 8px; border-radius:12px; text-transform:uppercase; }
+  .feed-time { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--text-dim); }
+  .feed-sev { font-family:'JetBrains Mono',monospace; font-size:12px; padding:2px 8px; border-radius:12px; text-transform:uppercase; }
   .chat-shell { background:var(--sky-card); border-radius:16px; display:flex; flex-direction:column; height:520px; }
   .chat-log { flex:1; overflow-y:auto; padding:24px; display:flex; flex-direction:column; gap:14px; }
   .msg { max-width:78%; padding:12px 16px; border-radius:14px; font-size:13px; line-height:1.55; }
@@ -129,14 +136,14 @@
   .alert-banner .alert-icon { color:var(--danger-coral); font-size:16px; flex-shrink:0; }
   .alert-banner .alert-text { flex:1; font-size:13px; line-height:1.4; }
   .alert-banner .alert-text strong { color:var(--danger-coral); }
-  .alert-banner .alert-tag { font-family:'JetBrains Mono',monospace; font-size:9px; text-transform:uppercase; color:var(--text-dim); display:block; margin-top:2px; }
+  .alert-banner .alert-tag { font-family:'JetBrains Mono',monospace; font-size:13px; text-transform:uppercase; color:var(--text-dim); display:block; margin-top:2px; }
   .alert-banner .alert-tag.gov-tag { color:var(--danger-coral); font-weight:600; }
   .alert-banner .alert-dismiss { background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:16px; padding:0 4px; flex-shrink:0; }
   .alert-banner .alert-dismiss:hover { color:var(--text-bright); }
 
   .map-container { border-radius:16px; overflow:hidden; margin-bottom:28px; border:1px solid rgba(255,255,255,.08); }
   #floodMap { height:380px; width:100%; background:var(--sky-card); }
-  .map-legend { display:flex; gap:18px; padding:12px 16px; background:var(--sky-card); font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-dim); flex-wrap:wrap; }
+  .map-legend { display:flex; gap:18px; padding:12px 16px; background:var(--sky-card); font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--text-dim); flex-wrap:wrap; }
   .map-legend span { display:flex; align-items:center; gap:6px; }
   .map-legend .dot { width:9px; height:9px; border-radius:50%; display:inline-block; }
   @media (max-width:640px){
@@ -153,7 +160,7 @@
 <div class="wrap">
   <div class="header-row">
     <div>
-      <div class="eyebrow">Live · Real Data · Real Time</div>
+      <div class="eyebrow">Live · Real Data · Real Time · No Billing Required</div>
       <h1>SafeStreet - Global Flood Risk Advisor</h1>
       <p class="sub">Check flood risk for any place using real hourly rainfall history, alerts, community reports, nearby hospitals, and a Gemini/ADK assistant.</p>
     </div>
@@ -169,6 +176,7 @@
     <div class="tab" data-tab="community">Community Reports</div>
     <div class="tab" data-tab="agent">Ask the Assistant</div>
     <div class="tab" data-tab="news">Weather News</div>
+    <div class="tab" data-tab="safety">🆘 Safety</div>
   </div>
 
   <div class="panel active" id="panel-dashboard">
@@ -239,11 +247,59 @@
     </div>
     <div id="newsList" class="news-list"><div class="note-banner">Loading latest headlines...</div></div>
   </div>
+
+  <div class="panel" id="panel-safety">
+    <div class="note-banner" id="geoStatus">Location access not yet enabled.</div>
+    <button class="submit-btn" id="enableLocationBtn" style="max-width:280px;margin-bottom:20px;">📍 Enable my location</button>
+
+    <div class="section-label">Your area right now</div>
+    <div id="myAreaCard" style="margin-bottom:28px;">
+      <div class="note-banner">Enable location above to see flood risk for exactly where you are, and get an alert if it turns dangerous.</div>
+    </div>
+
+    <div class="section-label">Emergency contacts (India) — tap any card to call</div>
+    <div class="grid" style="margin-bottom:28px;">
+      <a class="card risk-high emergency-card" href="tel:100"><div class="ward-name">Police</div><div class="risk-row"><div class="risk-score">100</div></div><div class="alert-text">All-India police emergency number.</div><div class="call-hint">📞 Tap to call</div></a>
+      <a class="card risk-high emergency-card" href="tel:108"><div class="ward-name">Ambulance</div><div class="risk-row"><div class="risk-score">108</div></div><div class="alert-text">Free emergency ambulance (also try 102 in Maharashtra).</div><div class="call-hint">📞 Tap to call</div></a>
+      <a class="card risk-high emergency-card" href="tel:101"><div class="ward-name">Fire Brigade</div><div class="risk-row"><div class="risk-score">101</div></div><div class="alert-text">Fire and rescue services.</div><div class="call-hint">📞 Tap to call</div></a>
+      <a class="card risk-med emergency-card" href="tel:112"><div class="ward-name">All-in-one Emergency</div><div class="risk-row"><div class="risk-score">112</div></div><div class="alert-text">Single number for police, fire, or medical.</div><div class="call-hint">📞 Tap to call</div></a>
+      <a class="card risk-med emergency-card" href="tel:1078"><div class="ward-name">Disaster Mgmt (NDRF)</div><div class="risk-row"><div class="risk-score">1078</div></div><div class="alert-text">National Disaster Response Force helpline.</div><div class="call-hint">📞 Tap to call</div></a>
+      <a class="card risk-low emergency-card" href="tel:1091"><div class="ward-name">Women's Helpline</div><div class="risk-row"><div class="risk-score">1091</div></div><div class="alert-text">24x7 women's safety helpline.</div><div class="call-hint">📞 Tap to call</div></a>
+    </div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-dim);margin-top:-18px;margin-bottom:28px;">Tapping a card dials directly on phones. On a desktop browser it may instead prompt to open a calling app (e.g. Skype) — these are standard nationwide India emergency numbers, worth double-checking against your local municipal/disaster-management office too.</div>
+
+    <button class="hospital-btn" id="openMapsHospitalsSafetyBtn" style="max-width:320px;margin-bottom:8px;">🗺️ Open nearby hospitals in Google Maps</button>
+    <button class="hospital-btn" id="findNearbyHospitalsSafetyBtn" style="max-width:280px;margin-bottom:12px;">Also show a quick in-app list</button>
+    <div class="hospital-list" id="safetyHospitalList" style="margin-bottom:28px;"></div>
+
+    <div class="section-label">Ask for help</div>
+    <div class="note-banner">If you're stuck and can't reach emergency services quickly, this sends an anonymous alert to other SafeStreet users near your location. No phone numbers are shared — you'll be able to message anyone who responds right here in the app.</div>
+    <div class="form-card" style="max-width:520px;margin-bottom:20px;">
+      <div class="field"><label>What's happening? (optional)</label><textarea id="sosMessage" placeholder="e.g. Water rising fast, stuck on 2nd floor..."></textarea></div>
+      <button class="submit-btn" id="sendSosBtn" style="background:var(--danger-coral);">🆘 Send SOS to people nearby</button>
+    </div>
+
+    <div class="section-label">Active nearby requests</div>
+    <div id="sosList"><div class="note-banner">Enable location to see requests near you.</div></div>
+  </div>
 </div>
+
+<div class="chat-shell" id="sosChatModal" style="display:none; position:fixed; inset:0; margin:auto; max-width:420px; height:480px; z-index:2000; box-shadow:0 20px 60px rgba(0,0,0,.5);">
+  <div style="padding:14px 18px; border-bottom:1px solid rgba(255,255,255,.08); display:flex; justify-content:space-between; align-items:center;">
+    <strong id="sosChatTitle" style="font-family:'Space Grotesk',sans-serif;">Helping someone nearby</strong>
+    <button id="sosChatClose" style="background:none;border:none;color:var(--text-dim);font-size:18px;cursor:pointer;">&times;</button>
+  </div>
+  <div class="chat-log" id="sosChatLog"></div>
+  <div class="chat-input-row">
+    <input type="text" id="sosChatInput" placeholder="Type a message...">
+    <button id="sosChatSend">Send</button>
+  </div>
+</div>
+<div id="sosChatOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1999;"></div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, collection, addDoc, query, orderBy, limit, onSnapshot, serverTimestamp }
+import { getFirestore, collection, addDoc, query, orderBy, limit, onSnapshot, serverTimestamp, doc, updateDoc }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -315,7 +371,7 @@ const MAX_REPORT_BOOST = 0.3;
 // Extra boost applied when recent, trusted news coverage independently
 // confirms flooding at a curated location — cross-checks the rainfall-only
 // math against what's actually being reported on the ground right now.
-const NEWS_BOOST = 0.18;
+const NEWS_BOOST = 0.10; // lowered from 0.18 — substring matching is a rough heuristic and shouldn't dominate the score
 let newsConfirmedLocations = new Set();
 // A community report stops affecting the risk % after this many hours —
 // otherwise one old report keeps inflating the score forever.
@@ -337,19 +393,56 @@ function computeReportBoost(reports) {
 }
 function formatDuration(hrs) {
   if (hrs < 1) return `${Math.round(hrs * 60)} min`;
-  return `${hrs} hr${hrs === 1 ? '' : 's'}`;
+  // Show the fractional part too for anything under ~3 hours so "1.5 hrs" doesn't
+  // get rounded away to a plain "2 hrs" — matters when duration is short/precise.
+  if (hrs < 3) return `${Math.round(hrs * 10) / 10} hr${hrs === 1 ? '' : 's'}`;
+  return `${Math.round(hrs)} hr${Math.round(hrs) === 1 ? '' : 's'}`;
+}
+// Standard hourly rainfall-intensity bands (roughly matching IMD/WMO
+// classifications), so the UI can say what KIND of rain this is, not just a
+// raw mm/hr number — a "drizzle for 3 hours" and a "heavy rain for 20 min"
+// read very differently even at similar-ish cumulative totals.
+function rainIntensityLabel(rain) {
+  if (rain < 0.5) return "drizzle";
+  if (rain < 4) return "light rain";
+  if (rain < 15) return "moderate rain";
+  if (rain < 50) return "heavy rain";
+  return "violent rain";
+}
+// Combines intensity + precise duration into one readable phrase, e.g.
+// "drizzling for 25 min" or "heavy rain for 2 hrs" — used everywhere a
+// rain status is shown so the wording stays consistent across the app.
+function rainStatusLabel(rain, dur) {
+  if (rain < RAIN_THRESHOLD_MM_HR) return "not currently raining";
+  const label = rainIntensityLabel(rain);
+  const verb = label === "drizzle" ? "drizzling" : label;
+  return `${verb} for ${formatDuration(dur)}`;
 }
 function riskScore(rain, dur, vuln, drainage, boost) {
   // Mumbai monsoon flooding is driven by sustained moderate rain more than short
   // intense bursts, so cumulative rainfall (rain × duration) is the primary
-  // signal here rather than instantaneous mm/hr alone — the old formula divided
-  // mm/hr by 35, which crushed anything under ~5mm/hr to near-zero regardless
-  // of how long it had been raining or how vulnerable/poorly-drained the spot was.
-  const cumulative = rain * dur; // total mm fallen during this rain spell
-  const intensityFactor = 1 - Math.exp(-cumulative / 12);  // saturates around ~12mm cumulative
-  const sustainedFactor = 1 - Math.exp(-dur / 3);          // long duration still matters even if light
-  const vulnerabilityFactor = 0.3 + 0.7 * vuln;            // vulnerability weighted more heavily than before
-  const drainageFactor = 1.6 - drainage;                   // poor drainage amplifies risk more strongly
+  // signal, rather than instantaneous mm/hr alone.
+  //
+  // Previous version's vulnerability/drainage multipliers could compound up to
+  // ~1.6x on top of an already-saturating intensity term, so even one day of
+  // light-but-steady rain (now correctly capped, see fetchOpenMeteoRain) pushed
+  // high-vulnerability wards straight to 100%. Retuned so only a genuinely
+  // extreme combination (max vulnerability + max bad drainage + a long, heavy
+  // spell) reaches the top of the scale — moderate conditions land in Watch,
+  // not High.
+  const cumulative = rain * dur; // total mm fallen during this rain spell (duration now capped at 24h)
+  const cumulativeFactor = 1 - Math.exp(-cumulative / 18);  // saturates around ~18mm cumulative (was 12 — too fast)
+  // Sustained rain and short heavy bursts flood Mumbai through different
+  // mechanisms — sewers overwhelmed over hours vs. a downpour outrunning
+  // drainage capacity in minutes — so a genuinely heavy/violent rain rate
+  // should register real risk even in its first 15–20 minutes, not only
+  // after accumulating for a while. burstFactor captures that; the final
+  // intensity used is whichever of the two signals is higher.
+  const burstFactor = 1 - Math.exp(-rain / 20); // saturates once rain rate itself is heavy (~20mm/hr+)
+  const intensityFactor = Math.max(cumulativeFactor, burstFactor);
+  const sustainedFactor = 1 - Math.exp(-dur / 5);          // long duration still matters even if light (was /3 — saturated too fast)
+  const vulnerabilityFactor = 0.4 + 0.6 * vuln;            // range 0.4–1.0 (was 0.3–1.0)
+  const drainageFactor = 1.3 - 0.6 * drainage;             // range 0.7–1.3 (was 0.6–1.6 — too wide)
   const base = intensityFactor * (0.6 + 0.4 * sustainedFactor) * vulnerabilityFactor * drainageFactor;
   return Math.min(Math.max(base + boost, 0), 1);
 }
@@ -387,6 +480,16 @@ function collapseRepeats(s) { return s.replace(/(.)\1+/g, "$1"); }
 // backward from the current hour and count how many consecutive hours it's
 // genuinely been raining — a real measurement, not a session-based guess.
 // Uses UTC timestamps so searched locations work globally instead of assuming the browser is in Mumbai.
+// Threshold for counting an hour as "actively raining" when measuring how long
+// a rain spell has lasted. 0.1mm/hr picked up model drizzle-noise that could
+// persist across the whole fetched history window, producing absurd "raining
+// 67 hours" readings — 0.3mm is still lenient but filters out that noise.
+const DURATION_COUNT_THRESHOLD_MM = 0.3;
+// Hard cap on how far back we count. Beyond a day, "how long has it been
+// raining" stops being a meaningful *current conditions* number — this also
+// prevents runaway cumulative-rainfall values from inflating the risk score.
+const MAX_DURATION_HOURS = 24;
+
 async function fetchOpenMeteoRain(lat, lon) {
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=precipitation&past_days=2&forecast_days=1&timezone=UTC`;
   const res = await fetch(url);
@@ -400,9 +503,9 @@ async function fetchOpenMeteoRain(lat, lon) {
   }
   const currentRain = precip[currentIdx] ?? 0;
   let hours = 0;
-  if (currentRain >= 0.1) {
-    for (let i = currentIdx; i >= 0; i--) {
-      if (precip[i] >= 0.1) hours++; else break;
+  if (currentRain >= DURATION_COUNT_THRESHOLD_MM) {
+    for (let i = currentIdx; i >= 0 && hours < MAX_DURATION_HOURS; i--) {
+      if (precip[i] >= DURATION_COUNT_THRESHOLD_MM) hours++; else break;
     }
   }
   return { rainfall_mm_hr: currentRain, duration_hrs: hours > 0 ? hours : 0.1 };
@@ -413,12 +516,21 @@ async function fetchOpenMeteoRain(lat, lon) {
 // partly model-estimated; OWM's is a real observation where available — so
 // when OWM has a live reading, trust it for the mm/hr number, and still use
 // Open-Meteo purely for how many hours it's been going.
+const MAX_OBSERVED_AGE_MINUTES = 45; // OWM readings older than this are treated as stale, not "live"
+
 async function fetchBlendedRain(lat, lon) {
   const [openMeteo, owm] = await Promise.all([
     fetchOpenMeteoRain(lat, lon).catch(() => ({ rainfall_mm_hr: 0, duration_hrs: 0.1 })),
-    fetch(`/api/current-weather?lat=${lat}&lon=${lon}`).then(r => r.json()).catch(() => ({ rainfall_mm_hr: null })),
+    fetch(`/api/current-weather?lat=${lat}&lon=${lon}`).then(r => r.json()).catch(() => ({ rainfall_mm_hr: null, age_minutes: null })),
   ]);
-  const observed = typeof owm.rainfall_mm_hr === "number" ? owm.rainfall_mm_hr : null;
+  // OWM's snapshot isn't guaranteed to be live-to-the-second — station/satellite
+  // updates can lag. Only trust it as "observed" if it's recent; otherwise fall
+  // back to the model estimate rather than showing a stale reading as current.
+  // Note: server.py now returns a real 0.0 (not null) when OWM confidently
+  // reports clear skies, so that correctly overrides an inflated model guess
+  // instead of being treated as "no OWM data, fall back to the model."
+  const isFresh = typeof owm.age_minutes === "number" && owm.age_minutes <= MAX_OBSERVED_AGE_MINUTES;
+  const observed = (isFresh && typeof owm.rainfall_mm_hr === "number") ? owm.rainfall_mm_hr : null;
   return {
     rainfall_mm_hr: observed !== null ? observed : openMeteo.rainfall_mm_hr,
     duration_hrs: openMeteo.duration_hrs,
@@ -527,8 +639,8 @@ async function fetchGlobalWatchpoints() {
       const r = await fetchOpenMeteoRain(loc.lat, loc.lon);
       const score = riskScore(r.rainfall_mm_hr, r.duration_hrs, 0.5, 0.5, 0);
       const tier = tierOf(score);
-      const durationLabel = r.rainfall_mm_hr >= RAIN_THRESHOLD_MM_HR ? `raining ${formatDuration(r.duration_hrs)}` : 'not currently raining';
-      const popupHtml = `<strong>${name}</strong><br>${(score*100).toFixed(0)}% est. risk (${tierLabel(tier)})<br>${r.rainfall_mm_hr.toFixed(1)}mm/hr · ${durationLabel}<br><span style="font-size:10px;opacity:.7;">Global watchlist — general estimate only</span>`;
+      const durationLabel = rainStatusLabel(r.rainfall_mm_hr, r.duration_hrs);
+      const popupHtml = `<strong>${name}</strong><br>${(score*100).toFixed(0)}% est. risk (${tierLabel(tier)})<br>${r.rainfall_mm_hr.toFixed(1)}mm/hr · ${durationLabel}<br><span style="font-size:12px;opacity:.7;">Global watchlist — general estimate only</span>`;
       upsertMapMarker(name, loc.lat, loc.lon, score, tier, popupHtml);
     } catch (e) { /* skip this point on failure, don't block the rest */ }
   }));
@@ -551,7 +663,7 @@ function renderDashboard() {
     const tier = tierOf(loc.score);
     const card = document.createElement("div");
     card.className = `card risk-${tier}`;
-    const durationLabel = loc.rain >= RAIN_THRESHOLD_MM_HR ? `raining ${formatDuration(loc.duration)}` : 'not currently raining';
+    const durationLabel = rainStatusLabel(loc.rain, loc.duration);
     card.innerHTML = `
       <div class="fill" style="height:${loc.score*100}%; background:var(--${tierColorVar(tier)});"></div>
       <div class="ward-name">${loc.name}</div>
@@ -567,7 +679,7 @@ function renderDashboard() {
   results.slice(visible.length).forEach(loc => {
     // Still place markers for non-shown cards so the map stays complete.
     const tier = tierOf(loc.score);
-    const durationLabel = loc.rain >= RAIN_THRESHOLD_MM_HR ? `raining ${formatDuration(loc.duration)}` : 'not currently raining';
+    const durationLabel = rainStatusLabel(loc.rain, loc.duration);
     const popupHtml = `<strong>${loc.name}</strong><br>${(loc.score*100).toFixed(0)}% risk (${tierLabel(tier)})<br>${loc.rain.toFixed(1)}mm/hr · ${durationLabel}`;
     upsertMapMarker(loc.name, loc.lat, loc.lon, loc.score, tier, popupHtml);
   });
@@ -597,7 +709,7 @@ function renderPicker(candidates, onPick) {
   const resultEl = document.getElementById("searchResult");
   const list = document.createElement("div");
   list.className = "picker-list";
-  list.innerHTML = `<div style="padding:8px 10px; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-dim);">Multiple matches found — choose one:</div>`;
+  list.innerHTML = `<div style="padding:8px 10px; font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--text-dim);">Multiple matches found — choose one:</div>`;
   candidates.forEach(c => {
     const item = document.createElement("div");
     item.className = "picker-item";
@@ -617,9 +729,9 @@ async function scoreAndShowLocation({ name, lat, lon, vulnerability, drainage_sc
   const boost = computeReportBoost(wardReports);
   const score = riskScore(r.rainfall_mm_hr, r.duration_hrs, vulnerability, drainage_score, boost);
   const tier = tierOf(score);
-  const durationLabel = r.rainfall_mm_hr >= RAIN_THRESHOLD_MM_HR ? `raining ${formatDuration(r.duration_hrs)}` : 'not currently raining';
+  const durationLabel = rainStatusLabel(r.rainfall_mm_hr, r.duration_hrs);
   const sourceNote = r.source === "observed" ? "live station reading" : "modeled estimate — no live station nearby";
-  const correctedNote = correctedFrom ? `<div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;">Showing "${name}" — closest match to "${correctedFrom}"</div>` : '';
+  const correctedNote = correctedFrom ? `<div style="font-size:13px;color:var(--text-dim);margin-bottom:8px;">Showing "${name}" — closest match to "${correctedFrom}"</div>` : '';
 
   resultEl.innerHTML = `
     ${correctedNote}
@@ -630,7 +742,8 @@ async function scoreAndShowLocation({ name, lat, lon, vulnerability, drainage_sc
       <div class="risk-row"><div class="risk-score">${(score*100).toFixed(0)}%</div><div class="risk-label">${tierLabel(tier)}</div></div>
       <div class="alert-text">${tier==='high' ? 'Avoid this area right now.' : tier==='med' ? 'Water collecting — proceed with caution.' : 'Conditions normal.'}</div>
       ${isCurated ? '' : '<div class="uncurated-tag">Estimated — general rainfall only, no local drainage data</div>'}
-      <button class="hospital-btn" id="findHospitalsBtn">Find nearby hospitals</button>
+      <button class="hospital-btn" id="openMapsHospitalsBtn">🗺️ Open nearby hospitals in Google Maps</button>
+      <button class="hospital-btn" id="findHospitalsBtn" style="margin-top:8px;">Also show a quick in-app list</button>
       <div class="hospital-list" id="hospitalList"></div>
     </div>
     <div style="margin-top:14px;">
@@ -638,16 +751,20 @@ async function scoreAndShowLocation({ name, lat, lon, vulnerability, drainage_sc
       <div id="inlineNews" class="news-list"><div class="note-banner">Loading related headlines...</div></div>
     </div>`;
 
+  document.getElementById("openMapsHospitalsBtn").addEventListener("click", () => openHospitalsInMaps(lat, lon));
+
   document.getElementById("findHospitalsBtn").addEventListener("click", async (e) => {
     e.target.textContent = "Searching nearby hospitals...";
     const hospitals = await findNearbyHospitals(lat, lon);
     const listEl = document.getElementById("hospitalList");
     if (!hospitals.length) {
-      listEl.innerHTML = `<div class="note-banner" style="margin-top:8px;">No hospitals found nearby, or the lookup service is temporarily unavailable.</div>`;
+      listEl.innerHTML = `<div class="note-banner" style="margin-top:8px;">Couldn't load the in-app list right now — use "Open in Google Maps" above instead, that always works.</div>`;
     } else {
       listEl.innerHTML = hospitals.map(h => `
-        <div class="hospital-item"><span>${h.name}</span><span class="h-dist">${h.distKm.toFixed(1)} km</span></div>
-      `).join('') + `<div style="font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--text-dim); margin-top:4px;">via OpenStreetMap community data — may be incomplete</div>`;
+        <a class="hospital-item" href="${directionsUrl(lat, lon, h.lat, h.lon)}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;">
+          <span>${h.name}</span><span class="h-dist">${h.distKm.toFixed(1)} km · directions ↗</span>
+        </a>
+      `).join('') + `<div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--text-dim); margin-top:4px;">via OpenStreetMap community data — tap any hospital for directions.</div>`;
     }
     e.target.remove();
   });
@@ -668,11 +785,24 @@ async function findNearbyHospitals(lat, lon) {
     const data = await res.json();
     return data.elements.map(el => {
       const elLat = el.lat ?? el.center?.lat, elLon = el.lon ?? el.center?.lon;
-      return { name: el.tags?.name || "Unnamed hospital", distKm: haversineKm(lat, lon, elLat, elLon) };
+      return { name: el.tags?.name || "Unnamed hospital", distKm: haversineKm(lat, lon, elLat, elLon), lat: elLat, lon: elLon };
     }).sort((a, b) => a.distKm - b.distKm).slice(0, 6);
   } catch (e) {
     return [];
   }
+}
+
+// The public Overpass instance above is a free community service and can be
+// slow, rate-limited, or occasionally blocked entirely for cloud-hosted apps
+// (the same category of problem that broke the Google News scraping earlier)
+// — so it's a best-effort inline preview, not the primary path anymore.
+// Google Maps search/directions always works and needs no API key, so it's
+// the reliable fallback (and the main action) everywhere hospitals are shown.
+function openHospitalsInMaps(lat, lon) {
+  window.open(`https://www.google.com/maps/search/hospitals/@${lat},${lon},15z`, "_blank", "noopener");
+}
+function directionsUrl(originLat, originLon, destLat, destLon) {
+  return `https://www.google.com/maps/dir/?api=1&origin=${originLat},${originLon}&destination=${destLat},${destLon}`;
 }
 
 async function geocodeAndScore(placeName) {
@@ -742,7 +872,7 @@ async function geocodeAndScore(placeName) {
       return;
     }
     const correctedNote = usedQuery.toLowerCase() !== placeName.toLowerCase()
-      ? `<div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;">Showing results for "${usedQuery}"</div>` : '';
+      ? `<div style="font-size:13px;color:var(--text-dim);margin-bottom:8px;">Showing results for "${usedQuery}"</div>` : '';
     if (candidates.length > 1) {
       resultEl.innerHTML = correctedNote;
       renderPicker(
@@ -772,7 +902,7 @@ function renderFeed() {
     const fresh = isReportFresh(r);
     item.className = "feed-item" + (fresh ? "" : " feed-item-stale");
     const time = r.reported_at?.toDate ? r.reported_at.toDate().toLocaleTimeString() : "just now";
-    const ageNote = fresh ? "" : `<div style="font-size:10px;color:var(--text-dim);margin-top:2px;">No longer counted toward risk % — older than ${REPORT_EXPIRY_HOURS}h</div>`;
+    const ageNote = fresh ? "" : `<div style="font-size:12px;color:var(--text-dim);margin-top:2px;">No longer counted toward risk % — older than ${REPORT_EXPIRY_HOURS}h</div>`;
     item.innerHTML = `<div class="feed-top"><div class="feed-ward">${r.location}</div><div class="feed-time">${time}</div></div>
       <div style="font-size:13px;color:var(--text-dim);margin-bottom:6px;">${r.description || "No details provided."}</div>
       <span class="feed-sev">${r.severity}-deep</span>${ageNote}`;
@@ -808,6 +938,315 @@ document.getElementById("submitReport").addEventListener("click", async () => {
   document.getElementById("reportWard").value = "";
   document.getElementById("reportDesc").value = "";
 });
+
+// ============================================================================
+// Geofencing: location-based flood alerts + emergency info
+// ============================================================================
+// Anonymous per-browser identity, used only to tell "my own" SOS/messages
+// apart from others' in the UI — never tied to a name, phone number, or
+// account. Persisted in localStorage so it's stable across page reloads on
+// the same device (this is a real deployed app, not a sandboxed artifact, so
+// localStorage is safe to use here).
+function getAnonId() {
+  let id = localStorage.getItem("safestreet_anon_id");
+  if (!id) {
+    id = "anon-" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    localStorage.setItem("safestreet_anon_id", id);
+  }
+  return id;
+}
+const MY_ANON_ID = getAnonId();
+
+let myLat = null, myLon = null;
+let lastNotifiedTier = null; // avoid re-notifying every render for the same ongoing risk level
+let geoWatchId = null;
+
+function findNearestCuratedWard(lat, lon, maxKm = 2) {
+  let best = null, bestDist = Infinity;
+  Object.entries(LOCATIONS).forEach(([name, loc]) => {
+    const d = haversineKm(lat, lon, loc.lat, loc.lon);
+    if (d < bestDist) { bestDist = d; best = { name, loc, dist: d }; }
+  });
+  return (best && best.dist <= maxKm) ? best : null;
+}
+
+function requestNotificationPermission() {
+  if (!("Notification" in window)) return;
+  if (Notification.permission === "default") Notification.requestPermission();
+}
+
+function notifyFloodRisk(name, score, tier) {
+  const body = `${name}: ${(score*100).toFixed(0)}% flood risk. Avoid this route if possible — stay cautious.`;
+  if ("Notification" in window && Notification.permission === "granted") {
+    new Notification("⚠️ Flood risk near you", { body });
+  }
+  // Always also surface it in-page, since notification permission may be denied
+  // or the tab may be backgrounded without OS-level notification support.
+  document.getElementById("geoStatus").textContent = `⚠️ ${body}`;
+}
+
+async function updateMyAreaCard() {
+  if (myLat === null) return;
+  const card = document.getElementById("myAreaCard");
+  const nearest = findNearestCuratedWard(myLat, myLon);
+  const label = nearest ? nearest.name : "Your current location";
+  const vuln = nearest ? nearest.loc.vulnerability : 0.5;
+  const drainage = nearest ? nearest.loc.drainage_score : 0.5;
+  const r = await fetchBlendedRain(myLat, myLon);
+  const wardReports = nearest ? liveReports.filter(rep => rep.location === nearest.name && isReportFresh(rep)) : [];
+  const boost = computeReportBoost(wardReports);
+  const score = riskScore(r.rainfall_mm_hr, r.duration_hrs, vuln, drainage, boost);
+  const tier = tierOf(score);
+  const durationLabel = rainStatusLabel(r.rainfall_mm_hr, r.duration_hrs);
+
+  card.innerHTML = `
+    <div class="card risk-${tier}">
+      <div class="fill" style="height:${score*100}%; background:var(--${tierColorVar(tier)});"></div>
+      <div class="ward-name">${label}${nearest ? '' : ' <span style="font-size:12px;font-weight:400;color:var(--text-dim);">(general estimate — not a curated hotspot)</span>'}</div>
+      <div class="ward-meta"><span>${r.rainfall_mm_hr.toFixed(1)}mm/hr · ${durationLabel}</span></div>
+      <div class="risk-row"><div class="risk-score">${(score*100).toFixed(0)}%</div><div class="risk-label">${tierLabel(tier)}</div></div>
+      <div class="alert-text">${tier==='high' ? 'Avoid this area right now — consider an alternate route.' : tier==='med' ? 'Water collecting nearby — proceed with caution.' : 'Conditions normal.'}</div>
+    </div>`;
+
+  // Only fire a fresh notification when risk *becomes* High, not on every refresh —
+  // otherwise this would re-notify every render loop while conditions stay bad.
+  if (tier === "high" && lastNotifiedTier !== "high") {
+    notifyFloodRisk(label, score, tier);
+  }
+  lastNotifiedTier = tier;
+}
+
+document.getElementById("enableLocationBtn").addEventListener("click", () => {
+  const statusEl = document.getElementById("geoStatus");
+  if (!("geolocation" in navigator)) {
+    statusEl.textContent = "Geolocation isn't supported in this browser.";
+    return;
+  }
+  statusEl.textContent = "Requesting location access...";
+  requestNotificationPermission();
+  if (geoWatchId !== null) navigator.geolocation.clearWatch(geoWatchId);
+  geoWatchId = navigator.geolocation.watchPosition(
+    (pos) => {
+      myLat = pos.coords.latitude; myLon = pos.coords.longitude;
+      statusEl.textContent = "Location active — you'll be alerted if your area floods.";
+      updateMyAreaCard();
+      renderNearbySos();
+    },
+    (err) => {
+      statusEl.textContent = `Couldn't get your location (${err.message}). You can still use the map/search above manually.`;
+    },
+    { enableHighAccuracy: true, maximumAge: 60000, timeout: 15000 }
+  );
+});
+
+document.getElementById("openMapsHospitalsSafetyBtn").addEventListener("click", () => {
+  if (myLat === null) { document.getElementById("geoStatus").textContent = "Enable location first so nearby hospitals can be found."; return; }
+  openHospitalsInMaps(myLat, myLon);
+});
+
+document.getElementById("findNearbyHospitalsSafetyBtn").addEventListener("click", async (e) => {
+  if (myLat === null) { document.getElementById("geoStatus").textContent = "Enable location first so nearby hospitals can be found."; return; }
+  e.target.textContent = "Searching...";
+  const hospitals = await findNearbyHospitals(myLat, myLon);
+  const listEl = document.getElementById("safetyHospitalList");
+  listEl.innerHTML = hospitals.length
+    ? hospitals.map(h => `<a class="hospital-item" href="${directionsUrl(myLat, myLon, h.lat, h.lon)}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;"><span>${h.name}</span><span class="h-dist">${h.distKm.toFixed(1)} km · directions ↗</span></a>`).join('')
+    : `<div class="note-banner">Couldn't load the in-app list right now — use "Open in Google Maps" above instead, that always works.</div>`;
+  e.target.textContent = "Also show a quick in-app list";
+});
+
+// ============================================================================
+// "Ask for help" — anonymous SOS broadcast to nearby users, with an in-app
+// relay chat so responders can help without ever exchanging phone numbers.
+// ============================================================================
+const SOS_NEARBY_RADIUS_KM = 3;
+const SOS_ACTIVE_HOURS = 6; // stop showing a request as "active" after this long
+
+function sosAgeHours(sos) {
+  const ts = sos.created_at?.toDate ? sos.created_at.toDate() : null;
+  if (!ts) return 0;
+  return (Date.now() - ts.getTime()) / 3600000;
+}
+
+document.getElementById("sendSosBtn").addEventListener("click", async () => {
+  if (myLat === null) {
+    document.getElementById("geoStatus").textContent = "Enable location first — SOS needs your location to alert people nearby.";
+    return;
+  }
+  const btn = document.getElementById("sendSosBtn");
+  btn.disabled = true; btn.textContent = "Sending...";
+  await addDoc(collection(db, "sos_requests"), {
+    requester_id: MY_ANON_ID,
+    lat: myLat, lon: myLon,
+    message: document.getElementById("sosMessage").value.trim(),
+    status: "active",
+    created_at: serverTimestamp(),
+  });
+  document.getElementById("sosMessage").value = "";
+  btn.disabled = false; btn.textContent = "🆘 Send SOS to people nearby";
+});
+
+let allSosRequests = [];
+// Live "last message" preview per SOS request, so people can see at a glance
+// whether there's a new reply without opening each chat individually. One
+// listener per currently-visible request, created once and reused rather
+// than re-subscribing on every render.
+let sosMessageListeners = {};
+function ensureSosMessagePreview(sosId) {
+  if (sosMessageListeners[sosId]) return;
+  const lastMsgQuery = query(collection(db, "sos_requests", sosId, "messages"), orderBy("sent_at", "desc"), limit(1));
+  sosMessageListeners[sosId] = onSnapshot(lastMsgQuery, snap => {
+    const badge = document.querySelector(`[data-msgbadge="${sosId}"]`);
+    if (!badge) return;
+    if (snap.empty) {
+      badge.textContent = "No replies yet";
+    } else {
+      const last = snap.docs[0].data();
+      const who = last.sender_id === MY_ANON_ID ? "You" : "Reply";
+      const text = (last.text || "").slice(0, 50);
+      badge.textContent = `💬 ${who}: ${text}${(last.text || "").length > 50 ? "…" : ""}`;
+    }
+  });
+}
+
+function renderSosCard(s, isMine) {
+  const dist = haversineKm(myLat, myLon, s.lat, s.lon);
+  const ageH = sosAgeHours(s);
+  const ageLabel = ageH < 1 ? `${Math.round(ageH * 60)}m ago` : `${ageH.toFixed(1)}h ago`;
+  const item = document.createElement("div");
+  item.className = "feed-item";
+  item.innerHTML = `
+    <div class="feed-top"><div class="feed-ward">${isMine ? "Your request" : "Needs help"} · ${dist.toFixed(1)}km away</div><div class="feed-time">${ageLabel}</div></div>
+    <div style="font-size:13px;color:var(--text-dim);margin-bottom:6px;">${s.message || "No details provided."}</div>
+    <div style="font-size:13px;color:var(--rain-teal);margin-bottom:8px;" data-msgbadge="${s._id}">Loading replies...</div>
+    <div style="display:flex;gap:8px;">
+      <button class="hospital-btn" data-openchat="${s._id}" style="max-width:160px;">${isMine ? "View & reply" : "Respond & message"}</button>
+      ${isMine ? `<button class="hospital-btn" data-resolve="${s._id}" style="max-width:140px;">Mark resolved</button>` : ""}
+    </div>
+  `;
+  ensureSosMessagePreview(s._id);
+  return item;
+}
+
+function renderNearbySos() {
+  const listEl = document.getElementById("sosList");
+  if (myLat === null) {
+    listEl.innerHTML = `<div class="note-banner">Enable location to see requests near you.</div>`;
+    return;
+  }
+  const nearby = allSosRequests.filter(s =>
+    s.status === "active" && sosAgeHours(s) <= SOS_ACTIVE_HOURS &&
+    haversineKm(myLat, myLon, s.lat, s.lon) <= SOS_NEARBY_RADIUS_KM
+  );
+  const mine = nearby.filter(s => s.requester_id === MY_ANON_ID);
+  const others = nearby.filter(s => s.requester_id !== MY_ANON_ID);
+
+  listEl.innerHTML = "";
+
+  if (mine.length) {
+    const header = document.createElement("div");
+    header.className = "section-label";
+    header.style.marginTop = "4px";
+    header.textContent = "Your active requests";
+    listEl.appendChild(header);
+    mine.forEach(s => listEl.appendChild(renderSosCard(s, true)));
+  }
+
+  const header2 = document.createElement("div");
+  header2.className = "section-label";
+  header2.style.marginTop = mine.length ? "20px" : "4px";
+  header2.textContent = "People nearby who need help";
+  listEl.appendChild(header2);
+
+  if (!others.length) {
+    listEl.innerHTML += `<div class="note-banner">No one else nearby has an active request right now.</div>`;
+  } else {
+    others.forEach(s => listEl.appendChild(renderSosCard(s, false)));
+  }
+
+  listEl.querySelectorAll("[data-openchat]").forEach(btn => {
+    btn.addEventListener("click", () => openSosChat(btn.dataset.openchat));
+  });
+  listEl.querySelectorAll("[data-resolve]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      await updateDoc(doc(db, "sos_requests", btn.dataset.resolve), { status: "resolved" });
+    });
+  });
+}
+
+const sosQuery = query(collection(db, "sos_requests"), orderBy("created_at", "desc"), limit(50));
+onSnapshot(sosQuery, snapshot => {
+  allSosRequests = snapshot.docs.map(d => ({ _id: d.id, ...d.data() }));
+  renderNearbySos();
+});
+
+// --- SOS chat modal: anonymous relay messaging, no phone numbers exchanged ---
+let activeSosChatId = null;
+let sosChatUnsub = null;
+
+function openSosChat(sosId) {
+  activeSosChatId = sosId;
+  const sos = allSosRequests.find(s => s._id === sosId);
+  const isMine = sos && sos.requester_id === MY_ANON_ID;
+  document.getElementById("sosChatTitle").textContent = isMine ? "Your request — replies" : "Helping someone nearby";
+  document.getElementById("sosChatModal").style.display = "flex";
+  document.getElementById("sosChatModal").style.flexDirection = "column";
+  document.getElementById("sosChatOverlay").style.display = "block";
+  document.getElementById("sosChatLog").innerHTML = "";
+  if (sosChatUnsub) sosChatUnsub();
+
+  // Pin the original request message at the top so anyone joining the chat
+  // has context without needing to scroll back to the SOS list.
+  if (sos) {
+    const pinned = document.createElement("div");
+    pinned.style.cssText = "font-size:13px;color:var(--text-dim);padding:8px 12px;background:rgba(255,255,255,.04);border-radius:8px;margin-bottom:4px;";
+    pinned.textContent = `Original request: ${sos.message || "No details provided."}`;
+    document.getElementById("sosChatLog").appendChild(pinned);
+  }
+
+  const msgsQuery = query(collection(db, "sos_requests", sosId, "messages"), orderBy("sent_at", "asc"), limit(100));
+  sosChatUnsub = onSnapshot(msgsQuery, snapshot => {
+    const log = document.getElementById("sosChatLog");
+    // Keep the pinned banner (first child) and rebuild only the message list below it.
+    const pinnedEl = log.firstElementChild && log.firstElementChild.textContent.startsWith("Original request:") ? log.firstElementChild : null;
+    log.innerHTML = "";
+    if (pinnedEl) log.appendChild(pinnedEl);
+    if (snapshot.empty) {
+      const hint = document.createElement("div");
+      hint.style.cssText = "font-size:12px;color:var(--text-dim);text-align:center;padding:12px;";
+      hint.textContent = isMine ? "No replies yet — you'll see them here as soon as someone responds." : "Say something to let them know help is on the way.";
+      log.appendChild(hint);
+    }
+    snapshot.docs.forEach(d => {
+      const m = d.data();
+      const mine = m.sender_id === MY_ANON_ID;
+      const el = document.createElement("div");
+      el.className = `msg ${mine ? "user" : "agent"}`;
+      el.textContent = m.text;
+      log.appendChild(el);
+    });
+    log.scrollTop = log.scrollHeight;
+  });
+}
+function closeSosChat() {
+  document.getElementById("sosChatModal").style.display = "none";
+  document.getElementById("sosChatOverlay").style.display = "none";
+  if (sosChatUnsub) { sosChatUnsub(); sosChatUnsub = null; }
+  activeSosChatId = null;
+}
+document.getElementById("sosChatClose").addEventListener("click", closeSosChat);
+document.getElementById("sosChatOverlay").addEventListener("click", closeSosChat);
+document.getElementById("sosChatSend").addEventListener("click", async () => {
+  const input = document.getElementById("sosChatInput");
+  const text = input.value.trim();
+  if (!text || !activeSosChatId) return;
+  input.value = "";
+  await addDoc(collection(db, "sos_requests", activeSosChatId, "messages"), {
+    sender_id: MY_ANON_ID, text, sent_at: serverTimestamp(),
+  });
+});
+document.getElementById("sosChatInput").addEventListener("keydown", e => { if (e.key === "Enter") document.getElementById("sosChatSend").click(); });
+
 
 document.querySelectorAll(".tab").forEach(tab => {
   tab.addEventListener("click", () => {
@@ -887,7 +1326,7 @@ fetchGovernmentAlerts().then(() => renderAlerts([]));
 setInterval(() => fetchGovernmentAlerts().then(fetchRainfall), 600000); // gov alerts refreshed every 10 min to conserve quota
 // Re-render every minute even with no new Firestore events, so a report
 // crossing the staleness threshold immediately stops boosting the risk %.
-setInterval(() => { renderDashboard(); renderFeed(); }, 60000);
+setInterval(() => { renderDashboard(); renderFeed(); if (myLat !== null) updateMyAreaCard(); }, 60000);
 // Global watchpoints refresh less often than Mumbai (15 extra locations,
 // lower priority than the curated set) to keep total API calls reasonable.
 fetchGlobalWatchpoints();

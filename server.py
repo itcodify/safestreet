@@ -16,6 +16,7 @@ Render runs it via the Dockerfile CMD.
 from dotenv import load_dotenv
 load_dotenv("agent/.env", override=True)
 
+import time
 import httpx
 
 import json
@@ -49,6 +50,7 @@ else:
         os.environ.setdefault("GOOGLE_APPLICATION_CREDENTIALS", _local_key)
 
 OWM_KEY = os.environ.get("OWM_API_KEY", "")
+GNEWS_KEY = os.environ.get("GNEWS_API_KEY", "")
 
 from google.adk.cli.fast_api import get_fast_api_app  # noqa: E402  (import after env setup)
 
@@ -109,13 +111,17 @@ def geocode(q: str, limit: int = 5):
 
 @app.get("/api/news")
 def weather_news(q: str = "Mumbai flood monsoon"):
-    """Proxies Google News RSS so the frontend can show live weather/flood
-    headlines without needing a news-API key. Server-side to avoid browser
-    CORS restrictions on the RSS feed."""
+    """Fetches weather/flood headlines via GNews.io.
+
+    Previously scraped Google News RSS directly, but Google frequently serves
+    a CAPTCHA/consent page instead of the real feed to requests coming from
+    cloud/datacenter IP ranges (Render, AWS, GCP, etc.) — it worked in local
+    testing from a home connection and then silently returned nothing once
+    deployed. GNews is a proper API meant for server-to-server access, so it
+    doesn't have that problem. Get a free key (100 requests/day, no card
+    required) at https://gnews.io and set GNEWS_API_KEY."""
     import logging
-    import xml.etree.ElementTree as ET
     from datetime import datetime, timezone, timedelta
-    from email.utils import parsedate_to_datetime
 
     log = logging.getLogger("uvicorn.error")
 
@@ -129,58 +135,60 @@ def weather_news(q: str = "Mumbai flood monsoon"):
     }
     MAX_AGE_DAYS = 3  # drop anything older than this — conditions change fast
 
-    try:
+    if not GNEWS_KEY:
+        log.error("[/api/news] GNEWS_API_KEY is not set")
+        return JSONResponse({"items": [], "_debug": "GNEWS_API_KEY not configured on the server"})
+
+    def fetch_and_filter(max_age_days):
         r = requests.get(
-            "https://news.google.com/rss/search",
-            params={"q": q, "hl": "en-IN", "gl": "IN", "ceid": "IN:en"},
+            "https://gnews.io/api/v4/search",
+            params={
+                "q": q,
+                "lang": "en",
+                "country": "in",
+                "max": 10,
+                "sortby": "publishedAt",
+                "apikey": GNEWS_KEY,
+            },
             timeout=8,
-            headers={"User-Agent": "Mozilla/5.0"},
         )
         if not r.ok:
-            log.error(f"[/api/news] Google News returned HTTP {r.status_code} for q={q!r}. Body: {r.text[:300]!r}")
-            return JSONResponse({"items": [], "_debug": f"upstream HTTP {r.status_code}"})
+            log.error(f"[/api/news] GNews returned HTTP {r.status_code} for q={q!r}. Body: {r.text[:300]!r}")
+            return None, f"upstream HTTP {r.status_code}"
 
-        try:
-            root = ET.fromstring(r.content)
-        except ET.ParseError as e:
-            # Cloud/datacenter IPs (Render, AWS, GCP, etc.) are frequently served a
-            # CAPTCHA/consent HTML page instead of the RSS feed — this shows up here
-            # as an XML parse failure, not an HTTP error, since r.ok is still True.
-            log.error(f"[/api/news] XML parse failed for q={q!r}: {e}. First 300 chars: {r.text[:300]!r}")
-            return JSONResponse({"items": [], "_debug": f"non-XML response from upstream (likely blocked): {str(e)}"})
+        data = r.json()
+        cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
+        out = []
+        for a in data.get("articles", []):
+            pub_raw = (a.get("publishedAt") or "").strip()
+            try:
+                # GNews returns ISO-8601 with a trailing "Z"
+                pub_dt = datetime.fromisoformat(pub_raw.replace("Z", "+00:00"))
+            except Exception:
+                continue
+            if pub_dt < cutoff:
+                continue
+            source = ((a.get("source") or {}).get("name") or "").strip()
+            out.append({
+                "title": (a.get("title") or "").strip(),
+                "link": (a.get("url") or "").strip(),
+                "source": source,
+                "pubDate": pub_raw,
+                "_dt": pub_dt,
+                "_trusted": source.lower() in TRUSTED_SOURCES,
+            })
+        return out, None
 
-        raw_items = root.findall("./channel/item")
-        log.info(f"[/api/news] q={q!r} raw item count from Google News: {len(raw_items)}")
-
-        def parse_and_filter(max_age_days):
-            cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
-            out = []
-            for item in raw_items:
-                pub_raw = (item.findtext("pubDate") or "").strip()
-                try:
-                    pub_dt = parsedate_to_datetime(pub_raw)
-                    if pub_dt.tzinfo is None:
-                        pub_dt = pub_dt.replace(tzinfo=timezone.utc)
-                except Exception:
-                    continue
-                if pub_dt < cutoff:
-                    continue
-                source = (item.findtext("source") or "").strip()
-                out.append({
-                    "title": (item.findtext("title") or "").strip(),
-                    "link": (item.findtext("link") or "").strip(),
-                    "source": source,
-                    "pubDate": pub_raw,
-                    "_dt": pub_dt,
-                    "_trusted": source.lower() in TRUSTED_SOURCES,
-                })
-            return out
-
-        parsed_items = parse_and_filter(MAX_AGE_DAYS)
+    try:
+        parsed_items, err = fetch_and_filter(MAX_AGE_DAYS)
+        if err:
+            return JSONResponse({"items": [], "_debug": err})
         if not parsed_items:
-            parsed_items = parse_and_filter(14)
-        if not parsed_items and raw_items:
-            log.warning(f"[/api/news] q={q!r} had {len(raw_items)} raw items but 0 survived date filtering — check pubDate format")
+            # Strict 3-day window came up empty (common for smaller/niche
+            # locations) — widen rather than show nothing.
+            parsed_items, err = fetch_and_filter(14)
+            if err:
+                return JSONResponse({"items": [], "_debug": err})
 
         parsed_items.sort(key=lambda x: (not x["_trusted"], -x["_dt"].timestamp()))
         items = [{k: v for k, v in i.items() if not k.startswith("_")} for i in parsed_items[:10]]
@@ -195,9 +203,24 @@ def current_weather(lat: float, lon: float):
     """OWM's current-conditions endpoint reflects real station/satellite
     observations, whereas Open-Meteo's 'current hour' value here is partly
     model-based. Blending the two (frontend does the blending) gives a more
-    accurate mm/hr reading than either alone."""
+    accurate mm/hr reading than either alone.
+
+    OWM's free-tier snapshot isn't always live-to-the-second — it can lag
+    behind by anywhere from a few minutes to over an hour depending on
+    station/satellite update cadence. We surface the data's own timestamp
+    (`dt`) so the frontend can discard it as stale rather than silently
+    presenting an old reading as the current condition.
+
+    Critically, we also surface `is_raining` explicitly. OWM only includes a
+    `rain` key in the response when it's actually raining — its *absence*
+    is itself a confident "not raining right now" signal from a real
+    station/satellite, which is more trustworthy than Open-Meteo's modeled
+    guess for the current hour. Previously that absence was indistinguishable
+    from "OWM data unavailable," so the frontend fell back to the model
+    estimate even when OWM was confidently saying "clear" — this is what
+    was causing inflated risk % in places with no actual rain."""
     if not OWM_KEY:
-        return JSONResponse({"rainfall_mm_hr": None, "description": None})
+        return JSONResponse({"rainfall_mm_hr": None, "description": None, "age_minutes": None, "is_raining": None})
     try:
         r = requests.get(
             "https://api.openweathermap.org/data/2.5/weather",
@@ -205,14 +228,29 @@ def current_weather(lat: float, lon: float):
             timeout=8,
         )
         if not r.ok:
-            return JSONResponse({"rainfall_mm_hr": None, "description": None})
+            return JSONResponse({"rainfall_mm_hr": None, "description": None, "age_minutes": None, "is_raining": None})
         data = r.json()
+        obs_dt = data.get("dt")  # unix seconds — when this reading was actually taken
+        age_minutes = (time.time() - obs_dt) / 60 if obs_dt else None
+        weather_main = ((data.get("weather") or [{}])[0].get("main") or "").lower()
+        is_raining = weather_main in ("rain", "drizzle", "thunderstorm")
+        rain_1h = (data.get("rain") or {}).get("1h")
+        if is_raining:
+            # Raining per OWM's own classification; use the reported amount,
+            # or a small default if that specific field is missing (rare).
+            rainfall_value = rain_1h if rain_1h is not None else 0.5
+        else:
+            # Confident "not raining" from a real station/satellite reading —
+            # trust this over any modeled estimate, don't leave it as null.
+            rainfall_value = 0.0
         return JSONResponse({
-            "rainfall_mm_hr": (data.get("rain") or {}).get("1h"),
+            "rainfall_mm_hr": rainfall_value,
             "description": (data.get("weather") or [{}])[0].get("description"),
+            "age_minutes": age_minutes,
+            "is_raining": is_raining,
         })
     except Exception:
-        return JSONResponse({"rainfall_mm_hr": None, "description": None})
+        return JSONResponse({"rainfall_mm_hr": None, "description": None, "age_minutes": None, "is_raining": None})
 
 
 # Static frontend last, so it never shadows the API routes registered above.
