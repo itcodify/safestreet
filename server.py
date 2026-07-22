@@ -109,6 +109,17 @@ def geocode(q: str, limit: int = 5):
         return JSONResponse([])
 
 
+# Simple in-process cache for /api/news, keyed by normalized query. GNews's
+# free tier is 100 requests/day, and this app now polls it from two places
+# (the Weather News tab every 15 min, and the dashboard's news-based risk
+# signal every 15-30 min) plus every visitor's browser — without caching,
+# that adds up fast and the quota runs out mid-day, which looks exactly like
+# "it just stopped working" with no other symptom. A 10-minute cache means
+# repeated identical queries are served from memory instead of re-hitting
+# GNews, regardless of how many tabs/users are asking for the same thing.
+_NEWS_CACHE = {}
+_NEWS_CACHE_TTL_SECONDS = 600
+
 @app.get("/api/news")
 def weather_news(q: str = "Mumbai flood monsoon"):
     """Fetches weather/flood headlines via GNews.io.
@@ -124,6 +135,11 @@ def weather_news(q: str = "Mumbai flood monsoon"):
     from datetime import datetime, timezone, timedelta
 
     log = logging.getLogger("uvicorn.error")
+
+    cache_key = q.strip().lower()
+    cached = _NEWS_CACHE.get(cache_key)
+    if cached and (time.time() - cached["ts"]) < _NEWS_CACHE_TTL_SECONDS:
+        return JSONResponse(cached["payload"])
 
     # Trusted wire services / major outlets — shown ahead of other sources
     # when both are within the freshness window.
@@ -154,7 +170,11 @@ def weather_news(q: str = "Mumbai flood monsoon"):
         )
         if not r.ok:
             log.error(f"[/api/news] GNews returned HTTP {r.status_code} for q={q!r}. Body: {r.text[:300]!r}")
-            return None, f"upstream HTTP {r.status_code}"
+            # 403/429 from GNews almost always means the daily quota is used up —
+            # surface that distinctly so it's diagnosable instead of looking like
+            # "no news exists for this query."
+            reason = "GNews daily quota likely exceeded" if r.status_code in (403, 429) else f"upstream HTTP {r.status_code}"
+            return None, reason
 
         data = r.json()
         cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
@@ -192,7 +212,9 @@ def weather_news(q: str = "Mumbai flood monsoon"):
 
         parsed_items.sort(key=lambda x: (not x["_trusted"], -x["_dt"].timestamp()))
         items = [{k: v for k, v in i.items() if not k.startswith("_")} for i in parsed_items[:10]]
-        return JSONResponse({"items": items})
+        payload = {"items": items}
+        _NEWS_CACHE[cache_key] = {"ts": time.time(), "payload": payload}
+        return JSONResponse(payload)
     except Exception as e:
         log.error(f"[/api/news] Unexpected error for q={q!r}: {e!r}")
         return JSONResponse({"items": [], "_debug": str(e)})

@@ -84,6 +84,15 @@
   .uncurated-tag { display:inline-block; font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--text-dim); background:rgba(255,255,255,.06); padding:2px 7px; border-radius:10px; margin-top:8px; text-transform:uppercase; }
 
   .hospital-btn { margin-top:12px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); color:var(--text-bright); padding:8px 12px; border-radius:8px; font-family:'JetBrains Mono',monospace; font-size:13px; cursor:pointer; width:100%; }
+  .safety-panel .section-label { margin-top:28px; }
+  .safety-panel .section-label:first-of-type { margin-top:0; }
+  .safety-section { margin-bottom:0; }
+  .safety-action-btn { max-width:320px; width:100%; }
+  .safety-btn-row { display:flex; gap:10px; flex-wrap:wrap; }
+  .safety-btn-row .safety-action-btn { flex:1; min-width:220px; margin-top:0; }
+  .safety-disclaimer { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--text-dim); margin-top:12px; }
+  .safety-form-card { max-width:520px; }
+  @media (max-width:640px) { .safety-btn-row { flex-direction:column; } .safety-btn-row .safety-action-btn { min-width:0; } }
   .emergency-card { display:block; text-decoration:none; color:inherit; cursor:pointer; transition:transform .1s, box-shadow .15s; }
   .emergency-card:hover { transform:translateY(-2px); box-shadow:0 6px 18px rgba(0,0,0,.25); }
   .emergency-card:active { transform:translateY(0); }
@@ -248,33 +257,36 @@
     <div id="newsList" class="news-list"><div class="note-banner">Loading latest headlines...</div></div>
   </div>
 
-  <div class="panel" id="panel-safety">
+  <div class="panel safety-panel" id="panel-safety">
     <div class="note-banner" id="geoStatus">Location access not yet enabled.</div>
-    <button class="submit-btn" id="enableLocationBtn" style="max-width:280px;margin-bottom:20px;">📍 Enable my location</button>
+    <button class="submit-btn safety-action-btn" id="enableLocationBtn">📍 Enable my location</button>
 
     <div class="section-label">Your area right now</div>
-    <div id="myAreaCard" style="margin-bottom:28px;">
+    <div id="myAreaCard" class="safety-section">
       <div class="note-banner">Enable location above to see flood risk for exactly where you are, and get an alert if it turns dangerous.</div>
     </div>
 
     <div class="section-label">Emergency contacts (India) — tap any card to call</div>
-    <div class="grid" style="margin-bottom:28px;">
-      <a class="card risk-high emergency-card" href="tel:100"><div class="ward-name">Police</div><div class="risk-row"><div class="risk-score">100</div></div><div class="alert-text">All-India police emergency number.</div><div class="call-hint">📞 Tap to call</div></a>
-      <a class="card risk-high emergency-card" href="tel:108"><div class="ward-name">Ambulance</div><div class="risk-row"><div class="risk-score">108</div></div><div class="alert-text">Free emergency ambulance (also try 102 in Maharashtra).</div><div class="call-hint">📞 Tap to call</div></a>
-      <a class="card risk-high emergency-card" href="tel:101"><div class="ward-name">Fire Brigade</div><div class="risk-row"><div class="risk-score">101</div></div><div class="alert-text">Fire and rescue services.</div><div class="call-hint">📞 Tap to call</div></a>
-      <a class="card risk-med emergency-card" href="tel:112"><div class="ward-name">All-in-one Emergency</div><div class="risk-row"><div class="risk-score">112</div></div><div class="alert-text">Single number for police, fire, or medical.</div><div class="call-hint">📞 Tap to call</div></a>
-      <a class="card risk-med emergency-card" href="tel:1078"><div class="ward-name">Disaster Mgmt (NDRF)</div><div class="risk-row"><div class="risk-score">1078</div></div><div class="alert-text">National Disaster Response Force helpline.</div><div class="call-hint">📞 Tap to call</div></a>
-      <a class="card risk-low emergency-card" href="tel:1091"><div class="ward-name">Women's Helpline</div><div class="risk-row"><div class="risk-score">1091</div></div><div class="alert-text">24x7 women's safety helpline.</div><div class="call-hint">📞 Tap to call</div></a>
+    <div class="grid safety-section">
+      <a class="card risk-high emergency-card" href="tel:100"><div class="ward-name">Police</div><div class="risk-row"><div class="risk-score">100</div><div class="risk-label">CALL</div></div><div class="alert-text">All-India police emergency number.</div><div class="call-hint">📞 Tap to call</div></a>
+      <a class="card risk-high emergency-card" href="tel:108"><div class="ward-name">Ambulance</div><div class="risk-row"><div class="risk-score">108</div><div class="risk-label">CALL</div></div><div class="alert-text">Free emergency ambulance (also try 102 in Maharashtra).</div><div class="call-hint">📞 Tap to call</div></a>
+      <a class="card risk-high emergency-card" href="tel:101"><div class="ward-name">Fire Brigade</div><div class="risk-row"><div class="risk-score">101</div><div class="risk-label">CALL</div></div><div class="alert-text">Fire and rescue services.</div><div class="call-hint">📞 Tap to call</div></a>
+      <a class="card risk-med emergency-card" href="tel:112"><div class="ward-name">All-in-one Emergency</div><div class="risk-row"><div class="risk-score">112</div><div class="risk-label">CALL</div></div><div class="alert-text">Single number for police, fire, or medical.</div><div class="call-hint">📞 Tap to call</div></a>
+      <a class="card risk-med emergency-card" href="tel:1078"><div class="ward-name">Disaster Mgmt (NDRF)</div><div class="risk-row"><div class="risk-score">1078</div><div class="risk-label">CALL</div></div><div class="alert-text">National Disaster Response Force helpline.</div><div class="call-hint">📞 Tap to call</div></a>
+      <a class="card risk-low emergency-card" href="tel:1091"><div class="ward-name">Women's Helpline</div><div class="risk-row"><div class="risk-score">1091</div><div class="risk-label">CALL</div></div><div class="alert-text">24x7 women's safety helpline.</div><div class="call-hint">📞 Tap to call</div></a>
     </div>
-    <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-dim);margin-top:-18px;margin-bottom:28px;">Tapping a card dials directly on phones. On a desktop browser it may instead prompt to open a calling app (e.g. Skype) — these are standard nationwide India emergency numbers, worth double-checking against your local municipal/disaster-management office too.</div>
+    <div class="safety-disclaimer safety-section">Tapping a card dials directly on phones. On a desktop browser it may instead prompt to open a calling app (e.g. Skype) — these are standard nationwide India emergency numbers, worth double-checking against your local municipal/disaster-management office too.</div>
 
-    <button class="hospital-btn" id="openMapsHospitalsSafetyBtn" style="max-width:320px;margin-bottom:8px;">🗺️ Open nearby hospitals in Google Maps</button>
-    <button class="hospital-btn" id="findNearbyHospitalsSafetyBtn" style="max-width:280px;margin-bottom:12px;">Also show a quick in-app list</button>
-    <div class="hospital-list" id="safetyHospitalList" style="margin-bottom:28px;"></div>
+    <div class="section-label">Nearby hospitals</div>
+    <div class="safety-btn-row">
+      <button class="hospital-btn safety-action-btn" id="openMapsHospitalsSafetyBtn">🗺️ Open in Google Maps</button>
+      <button class="hospital-btn safety-action-btn" id="findNearbyHospitalsSafetyBtn">Show quick in-app list</button>
+    </div>
+    <div class="hospital-list" id="safetyHospitalList" style="margin-top:12px;"></div>
 
     <div class="section-label">Ask for help</div>
     <div class="note-banner">If you're stuck and can't reach emergency services quickly, this sends an anonymous alert to other SafeStreet users near your location. No phone numbers are shared — you'll be able to message anyone who responds right here in the app.</div>
-    <div class="form-card" style="max-width:520px;margin-bottom:20px;">
+    <div class="form-card safety-form-card">
       <div class="field"><label>What's happening? (optional)</label><textarea id="sosMessage" placeholder="e.g. Water rising fast, stuck on 2nd floor..."></textarea></div>
       <button class="submit-btn" id="sendSosBtn" style="background:var(--danger-coral);">🆘 Send SOS to people nearby</button>
     </div>
@@ -1361,7 +1373,10 @@ async function fetchNews(q) {
   try {
     const res = await fetch(`/api/news?q=${encodeURIComponent(q)}`);
     const data = await res.json();
-    renderNewsItems(data.items || [], "newsList", `No recent headlines found for "${q}". Try a broader search.`);
+    const emptyMsg = data._debug
+      ? `News temporarily unavailable (${data._debug}). This usually clears up on its own — try again in a bit.`
+      : `No recent headlines found for "${q}". Try a broader search.`;
+    renderNewsItems(data.items || [], "newsList", emptyMsg);
   } catch (e) {
     document.getElementById("newsList").innerHTML = `<div class="note-banner">Couldn't load headlines right now. Try again shortly.</div>`;
   }
@@ -1413,7 +1428,7 @@ async function fetchNewsSignals() {
   renderDashboard();
 }
 fetchNewsSignals();
-setInterval(fetchNewsSignals, 900000); // same 15-min cadence as the news tab, no need to poll more often
+setInterval(fetchNewsSignals, 1800000); // every 30 min — server now caches identical queries for 10 min anyway, so this is just to catch newer stories
 
 </script>
 </body>
