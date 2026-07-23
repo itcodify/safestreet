@@ -46,7 +46,7 @@ else:
         os.environ.setdefault("GOOGLE_APPLICATION_CREDENTIALS", _local_key)
 
 OWM_KEY = os.environ.get("OWM_API_KEY", "")
-GNEWS_KEY = os.environ.get("GNEWS_API_KEY", "")
+NEWSDATA_KEY = os.environ.get("NEWSDATA_API_KEY", "")
 
 try:
     from google.cloud import firestore as _firestore_module
@@ -127,50 +127,54 @@ def weather_news(q: str = "Mumbai flood monsoon"):
         return JSONResponse(cached["payload"])
 
     TRUSTED_SOURCES = {
-        "reuters", "the times of india", "hindustan times", "the indian express",
-        "ndtv", "the hindu", "livemint", "moneycontrol", "ani", "press trust of india",
-        "bbc news", "the economic times", "mid-day", "free press journal",
-        "india today", "news18", "cnbc tv18",
+        "reuters", "timesofindia", "hindustantimes", "indianexpress",
+        "ndtv", "thehindu", "livemint", "moneycontrol", "ani",
+        "bbc", "economictimes", "mid-day", "freepressjournal",
+        "indiatoday", "news18", "cnbctv18",
     }
     MAX_AGE_DAYS = 3
 
-    if not GNEWS_KEY:
-        log.error("[/api/news] GNEWS_API_KEY is not set")
-        return JSONResponse({"items": [], "_debug": "GNEWS_API_KEY not configured on the server"})
-
+    if not NEWSDATA_KEY:
+        log.error("[/api/news] NEWSDATA_API_KEY is not set")
+        return JSONResponse({"items": [], "_debug": "NEWSDATA_API_KEY not configured on the server"})
+    
     def fetch_and_filter(max_age_days):
         r = requests.get(
-            "https://gnews.io/api/v4/search",
+            "https://newsdata.io/api/1/news",
             params={
+                "apikey": NEWSDATA_KEY,
                 "q": q,
-                "lang": "en",
+                "language": "en",
                 "country": "in",
-                "max": 10,
-                "sortby": "publishedAt",
-                "apikey": GNEWS_KEY,
             },
             timeout=8,
         )
         if not r.ok:
-            log.error(f"[/api/news] GNews returned HTTP {r.status_code} for q={q!r}. Body: {r.text[:300]!r}")
-            reason = "GNews daily quota likely exceeded" if r.status_code in (403, 429) else f"upstream HTTP {r.status_code}"
+            log.error(f"[/api/news] NewsData returned HTTP {r.status_code} for q={q!r}. Body: {r.text[:300]!r}")
+            reason = "NewsData daily quota likely exceeded" if r.status_code in (401, 429) else f"upstream HTTP {r.status_code}"
             return None, reason
 
         data = r.json()
+        if data.get("status") != "success":
+            reason = (data.get("results") or {}).get("message", "NewsData error")
+            log.error(f"[/api/news] NewsData status={data.get('status')} for q={q!r}: {reason}")
+            return None, reason
+
         cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
         out = []
-        for a in data.get("articles", []):
-            pub_raw = (a.get("publishedAt") or "").strip()
+        for a in data.get("results", []):
+            pub_raw = (a.get("pubDate") or "").strip()
             try:
-                pub_dt = datetime.fromisoformat(pub_raw.replace("Z", "+00:00"))
+                # NewsData returns "YYYY-MM-DD HH:MM:SS" (UTC, no tz marker)
+                pub_dt = datetime.strptime(pub_raw, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
             except Exception:
                 continue
             if pub_dt < cutoff:
                 continue
-            source = ((a.get("source") or {}).get("name") or "").strip()
+            source = (a.get("source_id") or "").strip()
             out.append({
                 "title": (a.get("title") or "").strip(),
-                "link": (a.get("url") or "").strip(),
+                "link": (a.get("link") or "").strip(),
                 "source": source,
                 "pubDate": pub_raw,
                 "_dt": pub_dt,
