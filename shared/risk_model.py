@@ -26,7 +26,7 @@ def compute_risk(rainfall_mm_hr: float, duration_hrs: float,
     rainfall_mm_hr = max(rainfall_mm_hr, 0.0)
 
     cumulative = rainfall_mm_hr * duration_hrs
-    cumulative_factor = 1 - np.exp(-cumulative / 18.0)
+    cumulative_factor = 1 - np.exp(-cumulative / 60.0)
     burst_factor = 1 - np.exp(-rainfall_mm_hr / 20.0)
     intensity_factor = max(cumulative_factor, burst_factor)
 

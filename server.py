@@ -6,7 +6,7 @@ Responsibilities:
    in the image/repo) and point GOOGLE_APPLICATION_CREDENTIALS at it.
 2. Mount the ADK agent's FastAPI app (session + /run_sse endpoints) under
    the same app, so the frontend can call it with a relative URL.
-3. Proxy the two OpenWeatherMap calls the frontend needs, so the API key
+3. Proxy the OpenWeatherMap & Open-Meteo calls the frontend needs, so the API key
    stays server-side and is never shipped to the browser.
 4. Serve the static frontend.
 
@@ -18,10 +18,10 @@ load_dotenv("agent/.env", override=True)
 
 import time
 import httpx
-
 import json
 import os
 import tempfile
+import threading
 
 import requests
 import uvicorn
@@ -32,9 +32,7 @@ from fastapi.staticfiles import StaticFiles
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
 
-# --- Firebase credentials: expect the *contents* of the service-account
-# JSON in an env var, write it to a private temp file, and point ADC at it.
-# This means the JSON key never has to live in the repo or the image.
+# --- Firebase credentials setup
 _cred_json = os.environ.get("FIREBASE_CREDENTIALS_JSON")
 if _cred_json:
     _fd, _cred_path = tempfile.mkstemp(suffix=".json")
@@ -43,8 +41,6 @@ if _cred_json:
     os.chmod(_cred_path, 0o600)
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = _cred_path
 else:
-    # Local-dev fallback: if you keep a gitignored firebase-key.json next to
-    # this file, it'll be picked up automatically. Never commit that file.
     _local_key = os.path.join(BASE_DIR, "firebase-key.json")
     if os.path.exists(_local_key):
         os.environ.setdefault("GOOGLE_APPLICATION_CREDENTIALS", _local_key)
@@ -52,7 +48,13 @@ else:
 OWM_KEY = os.environ.get("OWM_API_KEY", "")
 GNEWS_KEY = os.environ.get("GNEWS_API_KEY", "")
 
-from google.adk.cli.fast_api import get_fast_api_app  # noqa: E402  (import after env setup)
+try:
+    from google.cloud import firestore as _firestore_module
+    _firestore_db = _firestore_module.Client()
+except Exception:
+    _firestore_db = None
+
+from google.adk.cli.fast_api import get_fast_api_app  # noqa: E402
 
 app: FastAPI = get_fast_api_app(
     agents_dir=BASE_DIR,
@@ -60,10 +62,12 @@ app: FastAPI = get_fast_api_app(
     allow_origins=["*"],
 )
 
+# ---------------------------------------------------------------------------
+# Weather & News Endpoints
+# ---------------------------------------------------------------------------
 
 @app.get("/api/weather-alerts")
 def weather_alerts(lat: float = 19.076, lon: float = 72.8777):
-    """Server-side proxy for OWM's One Call alerts — key never reaches the client."""
     if not OWM_KEY:
         return JSONResponse({"alerts": []})
     try:
@@ -86,8 +90,6 @@ def weather_alerts(lat: float = 19.076, lon: float = 72.8777):
 
 @app.get("/api/geocode")
 def geocode(q: str, limit: int = 5):
-    """Global geocoding via Open-Meteo (free, no key, no quota) — reliable
-    worldwide, unlike relying solely on OWM's geocoder + key/quota status."""
     try:
         r = requests.get(
             "https://geocoding-api.open-meteo.com/v1/search",
@@ -109,28 +111,11 @@ def geocode(q: str, limit: int = 5):
         return JSONResponse([])
 
 
-# Simple in-process cache for /api/news, keyed by normalized query. GNews's
-# free tier is 100 requests/day, and this app now polls it from two places
-# (the Weather News tab every 15 min, and the dashboard's news-based risk
-# signal every 15-30 min) plus every visitor's browser — without caching,
-# that adds up fast and the quota runs out mid-day, which looks exactly like
-# "it just stopped working" with no other symptom. A 10-minute cache means
-# repeated identical queries are served from memory instead of re-hitting
-# GNews, regardless of how many tabs/users are asking for the same thing.
 _NEWS_CACHE = {}
 _NEWS_CACHE_TTL_SECONDS = 600
 
 @app.get("/api/news")
 def weather_news(q: str = "Mumbai flood monsoon"):
-    """Fetches weather/flood headlines via GNews.io.
-
-    Previously scraped Google News RSS directly, but Google frequently serves
-    a CAPTCHA/consent page instead of the real feed to requests coming from
-    cloud/datacenter IP ranges (Render, AWS, GCP, etc.) — it worked in local
-    testing from a home connection and then silently returned nothing once
-    deployed. GNews is a proper API meant for server-to-server access, so it
-    doesn't have that problem. Get a free key (100 requests/day, no card
-    required) at https://gnews.io and set GNEWS_API_KEY."""
     import logging
     from datetime import datetime, timezone, timedelta
 
@@ -141,15 +126,13 @@ def weather_news(q: str = "Mumbai flood monsoon"):
     if cached and (time.time() - cached["ts"]) < _NEWS_CACHE_TTL_SECONDS:
         return JSONResponse(cached["payload"])
 
-    # Trusted wire services / major outlets — shown ahead of other sources
-    # when both are within the freshness window.
     TRUSTED_SOURCES = {
         "reuters", "the times of india", "hindustan times", "the indian express",
         "ndtv", "the hindu", "livemint", "moneycontrol", "ani", "press trust of india",
         "bbc news", "the economic times", "mid-day", "free press journal",
         "india today", "news18", "cnbc tv18",
     }
-    MAX_AGE_DAYS = 3  # drop anything older than this — conditions change fast
+    MAX_AGE_DAYS = 3
 
     if not GNEWS_KEY:
         log.error("[/api/news] GNEWS_API_KEY is not set")
@@ -170,9 +153,6 @@ def weather_news(q: str = "Mumbai flood monsoon"):
         )
         if not r.ok:
             log.error(f"[/api/news] GNews returned HTTP {r.status_code} for q={q!r}. Body: {r.text[:300]!r}")
-            # 403/429 from GNews almost always means the daily quota is used up —
-            # surface that distinctly so it's diagnosable instead of looking like
-            # "no news exists for this query."
             reason = "GNews daily quota likely exceeded" if r.status_code in (403, 429) else f"upstream HTTP {r.status_code}"
             return None, reason
 
@@ -182,7 +162,6 @@ def weather_news(q: str = "Mumbai flood monsoon"):
         for a in data.get("articles", []):
             pub_raw = (a.get("publishedAt") or "").strip()
             try:
-                # GNews returns ISO-8601 with a trailing "Z"
                 pub_dt = datetime.fromisoformat(pub_raw.replace("Z", "+00:00"))
             except Exception:
                 continue
@@ -204,8 +183,6 @@ def weather_news(q: str = "Mumbai flood monsoon"):
         if err:
             return JSONResponse({"items": [], "_debug": err})
         if not parsed_items:
-            # Strict 3-day window came up empty (common for smaller/niche
-            # locations) — widen rather than show nothing.
             parsed_items, err = fetch_and_filter(14)
             if err:
                 return JSONResponse({"items": [], "_debug": err})
@@ -222,25 +199,6 @@ def weather_news(q: str = "Mumbai flood monsoon"):
 
 @app.get("/api/current-weather")
 def current_weather(lat: float, lon: float):
-    """OWM's current-conditions endpoint reflects real station/satellite
-    observations, whereas Open-Meteo's 'current hour' value here is partly
-    model-based. Blending the two (frontend does the blending) gives a more
-    accurate mm/hr reading than either alone.
-
-    OWM's free-tier snapshot isn't always live-to-the-second — it can lag
-    behind by anywhere from a few minutes to over an hour depending on
-    station/satellite update cadence. We surface the data's own timestamp
-    (`dt`) so the frontend can discard it as stale rather than silently
-    presenting an old reading as the current condition.
-
-    Critically, we also surface `is_raining` explicitly. OWM only includes a
-    `rain` key in the response when it's actually raining — its *absence*
-    is itself a confident "not raining right now" signal from a real
-    station/satellite, which is more trustworthy than Open-Meteo's modeled
-    guess for the current hour. Previously that absence was indistinguishable
-    from "OWM data unavailable," so the frontend fell back to the model
-    estimate even when OWM was confidently saying "clear" — this is what
-    was causing inflated risk % in places with no actual rain."""
     if not OWM_KEY:
         return JSONResponse({"rainfall_mm_hr": None, "description": None, "age_minutes": None, "is_raining": None})
     try:
@@ -252,19 +210,16 @@ def current_weather(lat: float, lon: float):
         if not r.ok:
             return JSONResponse({"rainfall_mm_hr": None, "description": None, "age_minutes": None, "is_raining": None})
         data = r.json()
-        obs_dt = data.get("dt")  # unix seconds — when this reading was actually taken
+        obs_dt = data.get("dt")
         age_minutes = (time.time() - obs_dt) / 60 if obs_dt else None
         weather_main = ((data.get("weather") or [{}])[0].get("main") or "").lower()
         is_raining = weather_main in ("rain", "drizzle", "thunderstorm")
         rain_1h = (data.get("rain") or {}).get("1h")
         if is_raining:
-            # Raining per OWM's own classification; use the reported amount,
-            # or a small default if that specific field is missing (rare).
             rainfall_value = rain_1h if rain_1h is not None else 0.5
         else:
-            # Confident "not raining" from a real station/satellite reading —
-            # trust this over any modeled estimate, don't leave it as null.
             rainfall_value = 0.0
+        _record_rain_sample(lat, lon, rainfall_value)
         return JSONResponse({
             "rainfall_mm_hr": rainfall_value,
             "description": (data.get("weather") or [{}])[0].get("description"),
@@ -275,7 +230,260 @@ def current_weather(lat: float, lon: float):
         return JSONResponse({"rainfall_mm_hr": None, "description": None, "age_minutes": None, "is_raining": None})
 
 
-# Static frontend last, so it never shadows the API routes registered above.
+# ---------------------------------------------------------------------------
+# Rain Tracking & Batch Duration Logic
+# ---------------------------------------------------------------------------
+
+_rain_history_lock = threading.Lock()
+_RAIN_HISTORY = {}
+_RAIN_HISTORY_COLLECTION = "rain_history"
+_FIRESTORE_PERSIST_INTERVAL_SECONDS = 600
+_last_persisted = {}
+
+_DURATION_COUNT_THRESHOLD_MM = 1.0
+_MAX_DURATION_HOURS = 48.0
+_RAINFALL_CACHE = {}
+_RAINFALL_CACHE_TTL_SECONDS = 240
+
+
+def _history_key(lat, lon):
+    return f"{round(lat, 3)},{round(lon, 3)}"
+
+
+def _load_history_from_firestore(key):
+    import logging
+    log = logging.getLogger("uvicorn.error")
+    if _firestore_db is None:
+        return []
+    try:
+        doc = _firestore_db.collection(_RAIN_HISTORY_COLLECTION).document(key).get()
+        if doc.exists:
+            return (doc.to_dict() or {}).get("samples", [])
+        return []
+    except Exception as e:
+        log.error(f"[rain_history] Firestore read failed for {key}: {e!r}")
+        return []
+
+
+def _persist_history_to_firestore(key, samples):
+    import logging
+    log = logging.getLogger("uvicorn.error")
+    if _firestore_db is None:
+        return
+    now = time.time()
+    if now - _last_persisted.get(key, 0) < _FIRESTORE_PERSIST_INTERVAL_SECONDS:
+        return
+    try:
+        _firestore_db.collection(_RAIN_HISTORY_COLLECTION).document(key).set({"samples": samples})
+        _last_persisted[key] = now
+    except Exception as e:
+        log.error(f"[rain_history] Firestore write failed for {key}: {e!r}")
+
+
+def _record_rain_sample(lat, lon, rainfall_mm_hr):
+    key = _history_key(lat, lon)
+    now = time.time()
+    with _rain_history_lock:
+        samples = _RAIN_HISTORY.get(key)
+        if samples is None:
+            samples = _load_history_from_firestore(key)
+            _RAIN_HISTORY[key] = samples
+        if samples and (now - samples[-1]["ts"]) < 120:
+            return
+        samples.append({"ts": now, "rain": rainfall_mm_hr})
+        cutoff = now - 24 * 3600
+        while samples and samples[0]["ts"] < cutoff:
+            samples.pop(0)
+        _persist_history_to_firestore(key, samples)
+
+
+def _has_sufficient_history(key: str) -> bool:
+    samples = _RAIN_HISTORY.get(key, [])
+    if len(samples) < 2:
+        return False
+    return (samples[-1]["ts"] - samples[0]["ts"]) >= 600
+
+
+def _duration_from_history(lat, lon, current_rain, threshold_mm, max_hours):
+    if current_rain < threshold_mm:
+        return 0.1
+    key = _history_key(lat, lon)
+    samples = _RAIN_HISTORY.get(key, [])
+    if not samples:
+        return 0.1
+    now = time.time()
+    hours = 0.0
+    prev_ts = now
+    for s in reversed(samples):
+        if s["rain"] < threshold_mm:
+            break
+        gap_hours = (prev_ts - s["ts"]) / 3600.0
+        if gap_hours > 1.5:
+            break
+        hours += gap_hours
+        prev_ts = s["ts"]
+        if hours >= max_hours:
+            break
+    MIN_MEANINGFUL_HOURS = 1 / 60
+    return min(hours, max_hours) if hours >= MIN_MEANINGFUL_HOURS else 0.1
+
+
+def _duration_for_series(times, precip):
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    current_idx = 0
+    for i, t in enumerate(times):
+        try:
+            t_dt = datetime.fromisoformat(t).replace(tzinfo=timezone.utc)
+        except Exception:
+            continue
+        if t_dt <= now:
+            current_idx = i
+        else:
+            break
+
+    current_rain = precip[current_idx] if current_idx < len(precip) and precip[current_idx] is not None else 0.0
+
+    if current_rain < _DURATION_COUNT_THRESHOLD_MM:
+        return current_rain, 0.1
+
+    hours = 0
+    i = current_idx
+    while i >= 0 and hours < _MAX_DURATION_HOURS:
+        v = precip[i] if precip[i] is not None else 0.0
+        if v >= _DURATION_COUNT_THRESHOLD_MM:
+            hours += 1
+            i -= 1
+        else:
+            break
+
+    return current_rain, float(hours if hours > 0 else 0.1)
+
+
+def _openmeteo_batch_lookup(pairs, log):
+    cache_key = ";".join(f"{lat},{lon}" for lat, lon in pairs)
+    cached = _RAINFALL_CACHE.get(cache_key)
+    if cached and (time.time() - cached["ts"]) < _RAINFALL_CACHE_TTL_SECONDS:
+        return cached["payload"], False
+
+    try:
+        lat_param = ",".join(str(p[0]) for p in pairs)
+        lon_param = ",".join(str(p[1]) for p in pairs)
+        r = requests.get(
+            "https://api.open-meteo.com/v1/forecast",
+            params={
+                "latitude": lat_param, "longitude": lon_param,
+                "hourly": "precipitation", "past_days": 2, "forecast_days": 1, "timezone": "UTC",
+            },
+            timeout=12,
+        )
+        if not r.ok:
+            raise RuntimeError(f"Open-Meteo HTTP {r.status_code}: {r.text[:200]}")
+        data = r.json()
+        raw_list = data if isinstance(data, list) else [data]
+        if len(raw_list) != len(pairs):
+            raise RuntimeError(f"Open-Meteo returned {len(raw_list)} results for {len(pairs)} requested points")
+
+        results = []
+        for item in raw_list:
+            hourly = item.get("hourly") or {}
+            times = hourly.get("time") or []
+            precip = hourly.get("precipitation") or []
+            rain, dur = _duration_for_series(times, precip)
+            results.append({"rainfall_mm_hr": rain, "duration_hrs": dur})
+
+        _RAINFALL_CACHE[cache_key] = {"ts": time.time(), "payload": results}
+        return results, False
+
+    except Exception as e:
+        log.error(f"[/api/rainfall fallback] failed for {len(pairs)} points: {e!r}")
+        if cached:
+            return cached["payload"], True
+        return [{"rainfall_mm_hr": 0, "duration_hrs": 0.1} for _ in pairs], True
+
+
+@app.get("/api/rainfall")
+def rainfall(locations: str):
+    import logging
+    log = logging.getLogger("uvicorn.error")
+
+    pairs = []
+    for chunk in locations.split(";"):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        try:
+            lat_s, lon_s = chunk.split(",")
+            pairs.append((float(lat_s), float(lon_s)))
+        except Exception:
+            continue
+    if not pairs:
+        return JSONResponse({"results": [], "stale": False})
+
+    results = [None] * len(pairs)
+    needs_fallback_idx = []
+
+    for i, (lat, lon) in enumerate(pairs):
+        key = _history_key(lat, lon)
+        sufficient_history = _has_sufficient_history(key)
+
+        current_rain = None
+        if OWM_KEY:
+            try:
+                r = requests.get(
+                    "https://api.openweathermap.org/data/2.5/weather",
+                    params={"lat": lat, "lon": lon, "appid": OWM_KEY, "units": "metric"},
+                    timeout=6,
+                )
+                if r.ok:
+                    data = r.json()
+                    weather_main = ((data.get("weather") or [{}])[0].get("main") or "").lower()
+                    is_raining = weather_main in ("rain", "drizzle", "thunderstorm")
+                    rain_1h = (data.get("rain") or {}).get("1h")
+                    current_rain = (rain_1h if rain_1h is not None else 0.5) if is_raining else 0.0
+                    _record_rain_sample(lat, lon, current_rain)
+            except Exception:
+                pass
+
+        if current_rain is not None:
+            if current_rain < _DURATION_COUNT_THRESHOLD_MM:
+                results[i] = {"rainfall_mm_hr": 0.0, "duration_hrs": 0.1}
+            else:
+                # Always cross-check against the Open-Meteo model series too,
+                # even when we have live in-memory history. Live history resets
+                # to empty on every process restart, so on its own it
+                # systematically *underestimates* how long it's actually been
+                # raining (it can only ever report "time since this process
+                # started"). The 48h Open-Meteo series doesn't have that
+                # problem, so take whichever of the two durations is longer.
+                results[i] = {"rainfall_mm_hr": current_rain, "duration_hrs": 0.1}
+                needs_fallback_idx.append(i)
+        else:
+            needs_fallback_idx.append(i)
+
+    stale = False
+    if needs_fallback_idx:
+        fallback_pairs = [pairs[i] for i in needs_fallback_idx]
+        fallback_results, fallback_stale = _openmeteo_batch_lookup(fallback_pairs, log)
+        stale = fallback_stale
+        for idx, res in zip(needs_fallback_idx, fallback_results):
+            model_dur = res.get("duration_hrs", 0.1)
+            if results[idx] is not None:
+                lat, lon = pairs[idx]
+                current_rain = results[idx]["rainfall_mm_hr"]
+                key = _history_key(lat, lon)
+                if _has_sufficient_history(key):
+                    hist_dur = _duration_from_history(lat, lon, current_rain, _DURATION_COUNT_THRESHOLD_MM, _MAX_DURATION_HOURS)
+                    results[idx]["duration_hrs"] = max(hist_dur, model_dur)
+                else:
+                    results[idx]["duration_hrs"] = model_dur
+            else:
+                results[idx] = res
+
+    return JSONResponse({"results": results, "stale": stale})
+
+
+# Static frontend served last
 app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
 
 
