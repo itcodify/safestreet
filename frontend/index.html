@@ -160,6 +160,38 @@
     .grid{grid-template-columns:1fr 1fr;} .community-layout{grid-template-columns:1fr;} .chat-shell{height:70vh;}
     .search-bar{flex-direction:column;} .search-bar button{padding:12px;}
   }
+
+  .alert-bell {
+    position:fixed; bottom:24px; right:24px; z-index:1500;
+    width:52px; height:52px; border-radius:50%;
+    background:var(--sky-card); border:none; outline:none;
+    color:var(--text-dim); font-size:22px; line-height:1; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 4px 16px rgba(0,0,0,.3); transition:color .2s, box-shadow .2s;
+  }
+  .alert-bell span.icon {
+    display:inline-block; transform:translateY(-1px);
+  }
+  .alert-bell.has-alerts { color:var(--danger-coral); animation:alertGlow 1.6s ease-in-out infinite; }
+  @keyframes alertGlow {
+    0%,100% { box-shadow:0 0 0 0 rgba(239,106,90,.55), 0 4px 16px rgba(0,0,0,.3); }
+    50% { box-shadow:0 0 0 14px rgba(239,106,90,0), 0 4px 16px rgba(0,0,0,.3); }
+  }
+  .alert-bell-badge {
+    position:absolute; top:-4px; right:-4px; background:var(--danger-coral); color:#fff;
+    font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700;
+    min-width:18px; height:18px; border-radius:9px; display:flex; align-items:center; justify-content:center; padding:0 4px;
+  }
+  .alert-panel {
+    position:fixed; bottom:88px; right:24px; z-index:1500;
+    width:340px; max-height:60vh; overflow-y:auto;
+    background:var(--sky-mid); border-radius:14px; padding:12px;
+    box-shadow:0 10px 40px rgba(0,0,0,.45);
+  }
+  .alert-panel-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; padding:0 4px; }
+  .alert-panel-header button { background:none; border:none; color:var(--text-dim); font-size:18px; cursor:pointer; }
+  .alert-panel .alert-stack { display:flex; flex-direction:column; gap:8px; }
+  @media (max-width:480px) { .alert-panel { width:calc(100vw - 32px); right:16px; } }
 </style>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -177,7 +209,16 @@
   </div>
 </div>
 
-<div class="wrap"><div class="alert-stack" id="alertStack"></div></div>
+<button id="alertBellBtn" class="alert-bell" aria-label="View warnings">
+  <span class="icon">⚠️</span><span class="alert-bell-badge" id="alertBellBadge" style="display:none;">0</span>
+</button>
+<div id="alertPanel" class="alert-panel" style="display:none;">
+  <div class="alert-panel-header">
+    <strong>Active warnings</strong>
+    <button id="alertPanelClose">&times;</button>
+  </div>
+  <div class="alert-stack" id="alertStack"></div>
+</div>
 
 <div class="wrap">
   <div class="tabs">
@@ -608,6 +649,8 @@ let governmentAlerts = []; // populated by fetchGovernmentAlerts, empty if unava
 
 function renderAlerts(hotspotResults) {
   const stack = document.getElementById("alertStack");
+  const bell = document.getElementById("alertBellBtn");
+  const badge = document.getElementById("alertBellBadge");
   const alerts = [];
 
   governmentAlerts.forEach((a, idx) => {
@@ -627,8 +670,10 @@ function renderAlerts(hotspotResults) {
     }
   });
 
+  const active = alerts.filter(a => !dismissedAlerts.has(a.key));
+
   stack.innerHTML = "";
-  alerts.filter(a => !dismissedAlerts.has(a.key)).forEach(a => {
+  active.forEach(a => {
     const el = document.createElement("div");
     el.className = `alert-banner ${a.gov ? 'gov-alert' : ''}`;
     el.innerHTML = `
@@ -638,9 +683,29 @@ function renderAlerts(hotspotResults) {
     stack.appendChild(el);
   });
   stack.querySelectorAll(".alert-dismiss").forEach(btn => {
-    btn.addEventListener("click", () => { dismissedAlerts.add(btn.dataset.key); btn.closest(".alert-banner").remove(); });
+    btn.addEventListener("click", () => {
+      dismissedAlerts.add(btn.dataset.key);
+      btn.closest(".alert-banner").remove();
+      updateBell();
+    });
   });
+
+  function updateBell() {
+    const count = stack.querySelectorAll(".alert-banner").length;
+    bell.classList.toggle("has-alerts", count > 0);
+    badge.style.display = count > 0 ? "flex" : "none";
+    badge.textContent = count > 9 ? "9+" : count;
+  }
+  updateBell();
 }
+
+document.getElementById("alertBellBtn").addEventListener("click", () => {
+  const panel = document.getElementById("alertPanel");
+  panel.style.display = panel.style.display === "none" ? "block" : "none";
+});
+document.getElementById("alertPanelClose").addEventListener("click", () => {
+  document.getElementById("alertPanel").style.display = "none";
+});
 
 // Government alerts via OpenWeatherMap's One Call 3.0 "alerts" field.
 // This requires enrolling in OWM's separate One Call by Call subscription —
