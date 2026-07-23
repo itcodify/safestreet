@@ -76,6 +76,7 @@
     .wrap .tabs { display:none; }
     .header-row { padding-left:52px; padding-right:52px; }
   }
+
   header .header-row { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; }
   * { box-sizing:border-box; margin:0; padding:0; }
   body { background:linear-gradient(180deg,var(--sky-deep),var(--sky-mid)); font-family:'Inter',sans-serif; color:var(--text-bright); min-height:100vh; padding:32px 24px 80px; }
@@ -198,6 +199,38 @@
     .grid{grid-template-columns:1fr 1fr;} .community-layout{grid-template-columns:1fr;} .chat-shell{height:70vh;}
     .search-bar{flex-direction:column;} .search-bar button{padding:12px;}
   }
+
+  .alert-bell {
+    position:fixed; bottom:24px; right:24px; z-index:1500;
+    width:52px; height:52px; border-radius:50%;
+    background:var(--sky-card); border:none; outline:none;
+    color:var(--text-dim); font-size:22px; line-height:1; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 4px 16px rgba(0,0,0,.3); transition:color .2s, box-shadow .2s;
+  }
+  .alert-bell span.icon {
+    display:inline-block; transform:translateY(-1px);
+  }
+  .alert-bell.has-alerts { color:var(--danger-coral); animation:alertGlow 1.6s ease-in-out infinite; }
+  @keyframes alertGlow {
+    0%,100% { box-shadow:0 0 0 0 rgba(239,106,90,.55), 0 4px 16px rgba(0,0,0,.3); }
+    50% { box-shadow:0 0 0 14px rgba(239,106,90,0), 0 4px 16px rgba(0,0,0,.3); }
+  }
+  .alert-bell-badge {
+    position:absolute; top:-4px; right:-4px; background:var(--danger-coral); color:#fff;
+    font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700;
+    min-width:18px; height:18px; border-radius:9px; display:flex; align-items:center; justify-content:center; padding:0 4px;
+  }
+  .alert-panel {
+    position:fixed; bottom:88px; right:24px; z-index:1500;
+    width:340px; max-height:60vh; overflow-y:auto;
+    background:var(--sky-mid); border-radius:14px; padding:12px;
+    box-shadow:0 10px 40px rgba(0,0,0,.45);
+  }
+  .alert-panel-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; padding:0 4px; }
+  .alert-panel-header button { background:none; border:none; color:var(--text-dim); font-size:18px; cursor:pointer; }
+  .alert-panel .alert-stack { display:flex; flex-direction:column; gap:8px; }
+  @media (max-width:480px) { .alert-panel { width:calc(100vw - 32px); right:16px; } }
 </style>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -222,13 +255,22 @@
     <div>
       <div class="eyebrow">Live · Real Data · Real Time</div>
       <h1>SafeStreet - Global Flood Risk Advisor</h1>
-      <p class="sub">Check flood risk for any place using real hourly rainfall history, alerts, community reports, nearby hospitals, and a Gemini/ADK assistant.</p>
+      <p class="sub">Check flood risk for any place using real hourly rainfall history, alerts, community reports, nearby hospitals, and a Gemini/ADK assistant.</p><br>
     </div>
     <button class="theme-toggle" id="themeToggle" aria-label="Toggle light/dark mode"></button>
   </div>
 </div>
 
-<div class="wrap"><div class="alert-stack" id="alertStack"></div></div>
+<button id="alertBellBtn" class="alert-bell" aria-label="View warnings">
+  <span class="icon">⚠️</span><span class="alert-bell-badge" id="alertBellBadge" style="display:none;">0</span>
+</button>
+<div id="alertPanel" class="alert-panel" style="display:none;">
+  <div class="alert-panel-header">
+    <strong>Active warnings</strong>
+    <button id="alertPanelClose">&times;</button>
+  </div>
+  <div class="alert-stack" id="alertStack"></div>
+</div>
 
 <div class="wrap">
   <div class="tabs">
@@ -459,24 +501,7 @@ function updateOpenMeteoStatusBanner() {
   if (!statusEl) return;
   statusEl.textContent = openMeteoIssueDetected
     ? "⚠️ Live rainfall data is temporarily unavailable (Open-Meteo's free API limit has likely been reached for today). Showing the last known readings — risk % below may be outdated until it resets."
-    : "Live rainfall (observed + modeled blend) · refreshed every minute";
-}
-
-// Server-side batched cache covering all 21 curated Mumbai locations + 15
-// global watchpoints in ONE shared Open-Meteo call (refreshed every ~3 min
-// server-side, reused by every visitor) — see /api/rainfall-batch in
-// server.py. This replaces 36 separate direct-from-browser Open-Meteo calls
-// every 60s per open tab, which was what exhausted Open-Meteo's free per-IP
-// limits within hours and never really recovered — a banner alone wasn't
-// enough, the call volume itself had to come down.
-let rainfallBatchCache = {};
-async function fetchRainfallBatchFromServer() {
-  const res = await fetch("/api/rainfall-batch");
-  const payload = await res.json();
-  if (payload.data && Object.keys(payload.data).length) {
-    rainfallBatchCache = payload.data; // keep the last good data even if this call errored
-  }
-  return payload;
+    : "Live rainfall (observed + modeled blend) · refreshed every 4 min";
 }
 
 function computeReportBoost(reports) {
@@ -517,13 +542,13 @@ function riskScore(rain, dur, vuln, drainage, boost) {
   //
   // Previous version's vulnerability/drainage multipliers could compound up to
   // ~1.6x on top of an already-saturating intensity term, so even one day of
-  // light-but-steady rain (now correctly capped, see fetchOpenMeteoRain) pushed
+  // light-but-steady rain (now correctly capped server-side in /api/rainfall) pushed
   // high-vulnerability wards straight to 100%. Retuned so only a genuinely
   // extreme combination (max vulnerability + max bad drainage + a long, heavy
   // spell) reaches the top of the scale — moderate conditions land in Watch,
   // not High.
   const cumulative = rain * dur; // total mm fallen during this rain spell (duration now capped at 24h)
-  const cumulativeFactor = 1 - Math.exp(-cumulative / 18);  // saturates around ~18mm cumulative (was 12 — too fast)
+  const cumulativeFactor = 1 - Math.exp(-cumulative / 60);  // saturates around ~18mm cumulative (was 12 — too fast)
   // Sustained rain and short heavy bursts flood Mumbai through different
   // mechanisms — sewers overwhelmed over hours vs. a downpour outrunning
   // drainage capacity in minutes — so a genuinely heavy/violent rain rate
@@ -567,102 +592,81 @@ function levenshtein(a, b) {
 // — the single most common typo pattern, cheap and safe to always try.
 function collapseRepeats(s) { return s.replace(/(.)\1+/g, "$1"); }
 
-// --- Real rainfall + real duration, via Open-Meteo (free, no key, no card) ---
-// Open-Meteo returns actual hourly precipitation history, so we can look
-// backward from the current hour and count how many consecutive hours it's
-// genuinely been raining — a real measurement, not a session-based guess.
-// Uses UTC timestamps so searched locations work globally instead of assuming the browser is in Mumbai.
-// Threshold for counting an hour as "actively raining" when measuring how long
-// a rain spell has lasted. 0.1mm/hr picked up model drizzle-noise that could
-// persist across the whole fetched history window, producing absurd "raining
-// 67 hours" readings — 0.3mm is still lenient but filters out that noise.
-const DURATION_COUNT_THRESHOLD_MM = 0.3;
-// Hard cap on how far back we count. Beyond a day, "how long has it been
-// raining" stops being a meaningful *current conditions* number — this also
-// prevents runaway cumulative-rainfall values from inflating the risk score.
-const MAX_DURATION_HOURS = 24;
-
-async function fetchOpenMeteoRain(lat, lon) {
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=precipitation&past_days=2&forecast_days=1&timezone=UTC`;
-  const res = await fetch(url);
-  let data = {};
-  try { data = await res.json(); } catch (e) { /* fall through, handled below */ }
-  // Open-Meteo returns HTTP 429 (or occasionally a 400 with an "error" body)
-  // once its free-tier daily/minutely request limit is hit. Treat both as a
-  // real failure instead of letting `data.hourly` be undefined further down.
-  if (!res.ok || data.error || !data.hourly) {
-    const reason = data.reason || `HTTP ${res.status}`;
-    const err = new Error(`Open-Meteo request failed: ${reason}`);
-    err.isOpenMeteoLimit = res.status === 429 || /limit/i.test(reason);
-    throw err;
-  }
-  const times = data.hourly.time;
-  const precip = data.hourly.precipitation;
-  const now = new Date();
-  let currentIdx = 0;
-  for (let i = 0; i < times.length; i++) {
-    if (new Date(times[i] + "Z") <= now) currentIdx = i; else break;
-  }
-  const currentRain = precip[currentIdx] ?? 0;
-  let hours = 0;
-  if (currentRain >= DURATION_COUNT_THRESHOLD_MM) {
-    for (let i = currentIdx; i >= 0 && hours < MAX_DURATION_HOURS; i--) {
-      if (precip[i] >= DURATION_COUNT_THRESHOLD_MM) hours++; else break;
-    }
-  }
-  return { rainfall_mm_hr: currentRain, duration_hrs: hours > 0 ? hours : 0.1 };
+// Open-Meteo rainfall lookups now go through our own backend (/api/rainfall)
+// instead of being called directly from the browser. Previously every open
+// tab called Open-Meteo directly once per location every 60 seconds — 21
+// curated wards + 15 global points = 36 direct third-party calls/minute from
+// a SINGLE tab, which could exceed Open-Meteo's free daily quota in hours.
+// The backend batches all points into one Open-Meteo request and caches the
+// result server-side (shared across every visitor), which is the real fix
+// for the sustained 429 errors — see server.py's /api/rainfall for details.
+async function fetchRainfallBatch(pointsInOrder) {
+  const locParam = pointsInOrder.map(p => `${p.lat},${p.lon}`).join(";");
+  const res = await fetch(`/api/rainfall?locations=${encodeURIComponent(locParam)}`);
+  const data = await res.json();
+  if (data.stale) openMeteoIssueDetected = true;
+  return { results: data.results || [], stale: !!data.stale };
 }
 
-// Blends Open-Meteo's hourly-history duration with OpenWeatherMap's real
+// Blends the backend's Open-Meteo-derived duration with OpenWeatherMap's real
 // current-conditions rain reading. Open-Meteo's "current hour" figure can be
 // partly model-estimated; OWM's is a real observation where available — so
 // when OWM has a live reading, trust it for the mm/hr number, and still use
-// Open-Meteo purely for how many hours it's been going.
+// the Open-Meteo-derived value purely for how many hours it's been going.
 const MAX_OBSERVED_AGE_MINUTES = 45; // OWM readings older than this are treated as stale, not "live"
 
-async function fetchBlendedRain(lat, lon, fallback, precomputedOpenMeteo) {
-  const [openMeteoResult, owm] = await Promise.all([
-    precomputedOpenMeteo
-      ? Promise.resolve({ ok: true, ...precomputedOpenMeteo })
-      : fetchOpenMeteoRain(lat, lon)
-          .then(r => ({ ok: true, ...r }))
-          .catch(e => {
-            openMeteoIssueDetected = true;
-            // Prefer the last known reading for this exact spot over a fabricated
-            // zero — a zero here would silently understate flood risk.
-            return { ok: false, rainfall_mm_hr: fallback?.rainfall_mm_hr ?? 0, duration_hrs: fallback?.duration_hrs ?? 0.1 };
-          }),
+async function fetchBlendedRain(lat, lon, fallback) {
+  const [batch, owm] = await Promise.all([
+    fetchRainfallBatch([{ lat, lon }]).catch(() => ({
+      results: [{ rainfall_mm_hr: fallback?.rainfall_mm_hr ?? 0, duration_hrs: fallback?.duration_hrs ?? 0.1 }],
+      stale: true,
+    })),
     fetch(`/api/current-weather?lat=${lat}&lon=${lon}`).then(r => r.json()).catch(() => ({ rainfall_mm_hr: null, age_minutes: null })),
   ]);
-  const openMeteo = openMeteoResult;
+  const openMeteo = batch.results[0] || { rainfall_mm_hr: fallback?.rainfall_mm_hr ?? 0, duration_hrs: fallback?.duration_hrs ?? 0.1 };
   // OWM's snapshot isn't guaranteed to be live-to-the-second — station/satellite
   // updates can lag. Only trust it as "observed" if it's recent; otherwise fall
   // back to the model estimate rather than showing a stale reading as current.
-  // Note: server.py now returns a real 0.0 (not null) when OWM confidently
-  // reports clear skies, so that correctly overrides an inflated model guess
-  // instead of being treated as "no OWM data, fall back to the model."
+  // Note: server.py returns a real 0.0 (not null) when OWM confidently reports
+  // clear skies, so that correctly overrides an inflated model guess instead
+  // of being treated as "no OWM data, fall back to the model."
   const isFresh = typeof owm.age_minutes === "number" && owm.age_minutes <= MAX_OBSERVED_AGE_MINUTES;
   const observed = (isFresh && typeof owm.rainfall_mm_hr === "number") ? owm.rainfall_mm_hr : null;
   return {
     rainfall_mm_hr: observed !== null ? observed : openMeteo.rainfall_mm_hr,
     duration_hrs: openMeteo.duration_hrs,
     source: observed !== null ? "observed" : "modeled",
-    stale: !openMeteo.ok && observed === null,
+    stale: batch.stale && observed === null,
   };
 }
 
 async function fetchRainfall() {
-  const batch = await fetchRainfallBatchFromServer().catch(() => ({ data: {}, error: "network error" }));
-  openMeteoIssueDetected = !!batch.error; // batch-level failure — the server already tried, fresh reads below use its cached fallback if any
+  openMeteoIssueDetected = false; // fresh read each cycle — don't let a past outage stick forever
+  const names = Object.keys(LOCATIONS);
+  const points = names.map(name => ({ lat: LOCATIONS[name].lat, lon: LOCATIONS[name].lon }));
 
+  // One batched call for all curated wards, instead of 21 separate ones.
+  const batch = await fetchRainfallBatch(points).catch(() => ({ results: [], stale: true }));
+  if (batch.stale) openMeteoIssueDetected = true;
+
+  // OWM blending is still per-location (OWM doesn't support this kind of
+  // batching), but that API hasn't been the source of the rate-limit issue.
   const entries = await Promise.all(
-    Object.entries(LOCATIONS).map(async ([name, loc]) => {
-      const precomputed = rainfallBatchCache[name]; // present even on a failed call, from the server's last good cache
+    names.map(async (name, i) => {
+      const loc = LOCATIONS[name];
+      const openMeteo = batch.results[i] || liveRainfall[name] || { rainfall_mm_hr: 0, duration_hrs: 0.1 };
       try {
-        return [name, await fetchBlendedRain(loc.lat, loc.lon, liveRainfall[name], precomputed)];
+        const owm = await fetch(`/api/current-weather?lat=${loc.lat}&lon=${loc.lon}`).then(r => r.json());
+        const isFresh = typeof owm.age_minutes === "number" && owm.age_minutes <= MAX_OBSERVED_AGE_MINUTES;
+        const observed = (isFresh && typeof owm.rainfall_mm_hr === "number") ? owm.rainfall_mm_hr : null;
+        return [name, {
+          rainfall_mm_hr: observed !== null ? observed : openMeteo.rainfall_mm_hr,
+          duration_hrs: openMeteo.duration_hrs,
+          source: observed !== null ? "observed" : "modeled",
+          stale: batch.stale && observed === null,
+        }];
       } catch (e) {
-        openMeteoIssueDetected = true;
-        return [name, liveRainfall[name] || precomputed || { rainfall_mm_hr: 0, duration_hrs: 0.1 }];
+        return [name, { ...openMeteo, source: "modeled", stale: batch.stale }];
       }
     })
   );
@@ -697,6 +701,8 @@ let governmentAlerts = []; // populated by fetchGovernmentAlerts, empty if unava
 
 function renderAlerts(hotspotResults) {
   const stack = document.getElementById("alertStack");
+  const bell = document.getElementById("alertBellBtn");
+  const badge = document.getElementById("alertBellBadge");
   const alerts = [];
 
   governmentAlerts.forEach((a, idx) => {
@@ -716,8 +722,10 @@ function renderAlerts(hotspotResults) {
     }
   });
 
+  const active = alerts.filter(a => !dismissedAlerts.has(a.key));
+
   stack.innerHTML = "";
-  alerts.filter(a => !dismissedAlerts.has(a.key)).forEach(a => {
+  active.forEach(a => {
     const el = document.createElement("div");
     el.className = `alert-banner ${a.gov ? 'gov-alert' : ''}`;
     el.innerHTML = `
@@ -727,9 +735,29 @@ function renderAlerts(hotspotResults) {
     stack.appendChild(el);
   });
   stack.querySelectorAll(".alert-dismiss").forEach(btn => {
-    btn.addEventListener("click", () => { dismissedAlerts.add(btn.dataset.key); btn.closest(".alert-banner").remove(); });
+    btn.addEventListener("click", () => {
+      dismissedAlerts.add(btn.dataset.key);
+      btn.closest(".alert-banner").remove();
+      updateBell();
+    });
   });
+
+  function updateBell() {
+    const count = stack.querySelectorAll(".alert-banner").length;
+    bell.classList.toggle("has-alerts", count > 0);
+    badge.style.display = count > 0 ? "flex" : "none";
+    badge.textContent = count > 9 ? "9+" : count;
+  }
+  updateBell();
 }
+
+document.getElementById("alertBellBtn").addEventListener("click", () => {
+  const panel = document.getElementById("alertPanel");
+  panel.style.display = panel.style.display === "none" ? "block" : "none";
+});
+document.getElementById("alertPanelClose").addEventListener("click", () => {
+  document.getElementById("alertPanel").style.display = "none";
+});
 
 // Government alerts via OpenWeatherMap's One Call 3.0 "alerts" field.
 // This requires enrolling in OWM's separate One Call by Call subscription —
@@ -751,21 +779,27 @@ let showAllCards = false;
 const DEFAULT_CARD_COUNT = 6;
 
 async function fetchGlobalWatchpoints() {
-  // Rides along in the same /api/rainfall-batch response as the Mumbai
-  // locations (fetched by fetchRainfall) — reuse that cache instead of
-  // making 15 more direct Open-Meteo calls from the browser.
-  if (!Object.keys(rainfallBatchCache).length) {
-    await fetchRainfallBatchFromServer().catch(() => {});
+  const names = Object.keys(GLOBAL_WATCHPOINTS);
+  const points = names.map(name => ({ lat: GLOBAL_WATCHPOINTS[name].lat, lon: GLOBAL_WATCHPOINTS[name].lon }));
+  // One batched backend call for all 15 global points, instead of 15 separate
+  // direct-to-Open-Meteo calls — same fix as fetchRainfall() above.
+  try {
+    const batch = await fetchRainfallBatch(points);
+    if (batch.stale) { openMeteoIssueDetected = true; updateOpenMeteoStatusBanner(); }
+    names.forEach((name, i) => {
+      const loc = GLOBAL_WATCHPOINTS[name];
+      const r = batch.results[i];
+      if (!r) return;
+      const score = riskScore(r.rainfall_mm_hr, r.duration_hrs, 0.5, 0.5, 0);
+      const tier = tierOf(score);
+      const durationLabel = rainStatusLabel(r.rainfall_mm_hr, r.duration_hrs);
+      const popupHtml = `<strong>${name}</strong><br>${(score*100).toFixed(0)}% est. risk (${tierLabel(tier)})<br>${r.rainfall_mm_hr.toFixed(1)}mm/hr · ${durationLabel}<br><span style="font-size:12px;opacity:.7;">Global watchlist — general estimate only</span>`;
+      upsertMapMarker(name, loc.lat, loc.lon, score, tier, popupHtml);
+    });
+  } catch (e) {
+    openMeteoIssueDetected = true;
+    updateOpenMeteoStatusBanner();
   }
-  Object.entries(GLOBAL_WATCHPOINTS).forEach(([name, loc]) => {
-    const r = rainfallBatchCache[name];
-    if (!r) return; // no data yet (first-load ordering, or a still-failing batch) — leave marker absent rather than fake it
-    const score = riskScore(r.rainfall_mm_hr, r.duration_hrs, 0.5, 0.5, 0);
-    const tier = tierOf(score);
-    const durationLabel = rainStatusLabel(r.rainfall_mm_hr, r.duration_hrs);
-    const popupHtml = `<strong>${name}</strong><br>${(score*100).toFixed(0)}% est. risk (${tierLabel(tier)})<br>${r.rainfall_mm_hr.toFixed(1)}mm/hr · ${durationLabel}<br><span style="font-size:12px;opacity:.7;">Global watchlist — general estimate only</span>`;
-    upsertMapMarker(name, loc.lat, loc.lon, score, tier, popupHtml);
-  });
 }
 
 function renderDashboard() {
@@ -1377,29 +1411,11 @@ document.querySelectorAll(".tab").forEach(tab => {
   tab.addEventListener("click", () => {
     document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
     document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
-    // Both the desktop tab bar and the mobile drawer render an element with
-    // this same data-tab — keep both in sync so switching on one screen
-    // size doesn't leave a stale active state if the viewport changes.
-    document.querySelectorAll(`.tab[data-tab="${tab.dataset.tab}"]`).forEach(t => t.classList.add("active"));
+    tab.classList.add("active");
     document.getElementById("panel-" + tab.dataset.tab).classList.add("active");
     if (tab.dataset.tab === "dashboard") setTimeout(() => floodMap.invalidateSize(), 50);
-    closeMobileNav();
   });
 });
-
-const hamburgerBtn = document.getElementById("hamburgerBtn");
-const mobileNavOverlay = document.getElementById("mobileNavOverlay");
-const mobileNavDrawer = document.getElementById("mobileNavDrawer");
-function openMobileNav() {
-  mobileNavOverlay.classList.add("open");
-  mobileNavDrawer.classList.add("open");
-}
-function closeMobileNav() {
-  mobileNavOverlay.classList.remove("open");
-  mobileNavDrawer.classList.remove("open");
-}
-hamburgerBtn.addEventListener("click", openMobileNav);
-mobileNavOverlay.addEventListener("click", closeMobileNav);
 
 const themeToggle = document.getElementById("themeToggle");
 const SUN_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><line x1="12" y1="2" x2="12" y2="4"></line><line x1="12" y1="20" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="6.34" y2="6.34"></line><line x1="17.66" y1="17.66" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="4" y2="12"></line><line x1="20" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="6.34" y2="17.66"></line><line x1="17.66" y1="6.34" x2="19.07" y2="4.93"></line></svg>`;
@@ -1464,7 +1480,7 @@ document.getElementById("chatInput").addEventListener("keydown", e => { if (e.ke
 
 addMsg("Hi - I'm your flood risk assistant. Ask about any location, or ask which Mumbai hotspot is riskiest right now.", "agent");
 fetchRainfall();
-setInterval(fetchRainfall, 60000);
+setInterval(fetchRainfall, 240000); // 4 min — matches the server-side cache TTL, no point polling faster than the cache refreshes
 fetchGovernmentAlerts().then(() => renderAlerts([]));
 setInterval(() => fetchGovernmentAlerts().then(fetchRainfall), 600000); // gov alerts refreshed every 10 min to conserve quota
 // Re-render every minute even with no new Firestore events, so a report
