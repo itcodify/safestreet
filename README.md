@@ -1,81 +1,155 @@
-# SafeStreet — Mumbai Monsoon Flood Risk Advisor
-
-Live rainfall + community reports + an ADK/Gemini agent, all served from a single
-FastAPI process so it deploys cleanly as one Render web service.
-
-## Deploy to Render
+# SafeStreet 🌧️
+### A real-time, street-level flood-risk advisor for Mumbai's monsoon commuters
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/itcodify/safestreet)
 
-1. **Push these changes to GitHub** (they replace your existing files — see
-   "What changed" below).
-2. Click the button above. Render reads `render.yaml` and creates the service
-   automatically (Docker environment, free plan).
-3. When Render asks for environment variables, fill in:
-   | Variable | Where to get it |
-   |---|---|
-   | `GOOGLE_API_KEY` | [Google AI Studio](https://aistudio.google.com/apikey) — create a **new** key, don't reuse the old one |
-   | `OWM_API_KEY` | [OpenWeatherMap → API keys](https://home.openweathermap.org/api_keys) — create a **new** key |
-   | `FIREBASE_CREDENTIALS_JSON` | Firebase Console → Project Settings → Service Accounts → **Generate new private key** → open the downloaded file → paste its entire contents as the value |
+Built by **Aahana Gupta** for the Google Cloud Gen AI Academy — APAC Edition.
 
-   `GOOGLE_GENAI_USE_VERTEXAI` is already set to `FALSE` in `render.yaml`.
-4. Click **Apply** / **Create Web Service**. First build takes a few minutes.
-5. Once live, open the Render URL — frontend, agent chat, and weather data
-   all come from that one URL.
+---
 
-No manual "clickable steps to deploy" beyond that — the blueprint does the
-rest.
+## The problem
 
-## Why you need new keys (important)
+Weather apps tell you "Heavy rain in Mumbai." They don't tell you whether the
+specific stretch of road you're about to cross actually floods, whether the
+drainage in that pocket of the city can handle it, or whether it's been
+raining long enough for the ground to already be saturated. That
+information exists — scattered across WhatsApp forwards and random tweets —
+but there's no way to know if it's still true by the time it reaches you.
 
-Rotate all three credentials above before deploying, even if you deploy
-somewhere other than Render:
+**SafeStreet closes that gap**: it turns "it's raining" into an actual
+street-level risk percentage, and pairs it with the safety tools you need
+once you know the risk — nearby hospitals, one-tap emergency numbers, and an
+anonymous SOS system — all wrapped in a conversational agent so you can just
+ask *"should I leave for Dadar right now?"* and get a straight answer.
 
-- `agent/.env` in the uploaded project contained a live Google API key and
-  the path to a Firebase service-account key.
-- `firebase-key.json` contained a live Firebase service-account private key.
-- Both `agent/agent.py` and `frontend/index.html` had an OpenWeatherMap key
-  hardcoded — the frontend one was shipped to every browser that loaded the
-  page, fully visible in page source.
+## What it does
 
-None of these were found in your git history, so they were never pushed
-publicly. But since they've now been shared outside your machine, treat them
-as burned:
-- Google AI Studio → delete the old key, create a new one.
-- OpenWeatherMap → regenerate the key.
-- Firebase Console → Service Accounts → delete the old key, generate a new
-  one (old private keys can't be "changed", only revoked and replaced).
+- **Live risk dashboard** — curated Mumbai / Navi Mumbai / Thane flood
+  hotspots, refreshed every minute, plus global search for any location.
+- **Risk score that's more than "how hard is it raining"** — it blends:
+  - continuous rain *duration* (not just the current rate), calculated by
+    walking backward through hourly rainfall history
+  - a curated drainage/vulnerability baseline per ward, since live
+    drainage-capacity data doesn't exist publicly
+  - live news signals, so a confirmed flooding report pushes the score up
+    in real time
+  - community reports, which boost the score immediately and decay out
+    after a few hours
+- **Interactive hotspot map** (Leaflet.js) with color-coded risk pins.
+- **A Gemini-powered conversational agent** (built on Google's Agent
+  Development Kit) that reasons over real tools — get rainfall, get
+  community reports, compute risk, recommend an action — instead of
+  guessing an answer from one big prompt.
+- **Safety layer**: geofencing for your immediate surroundings, a nearby
+  hospital finder, one-tap emergency numbers, and an anonymous SOS system
+  that never shares your phone number or personal details with anyone.
+- **Honest about its own limits** — if a live-data source (Open-Meteo,
+  GNews) is temporarily unavailable, usually because of a free-tier daily
+  quota, the UI says so plainly instead of silently showing a number that
+  might not reflect reality.
 
-## What changed and why
+## Tech stack
 
-| File | Problem | Fix |
-|---|---|---|
-| `server.py` (new) | Frontend and agent ran as two separate processes on two ports (5500 + 8080) — Render only exposes one port | Single FastAPI process: mounts the ADK agent, proxies weather calls, and serves the frontend, all on `$PORT` |
-| `Dockerfile` | `RUN adk web agent` at build time is a long-running server command — it hangs the Docker build forever | Removed. Container just installs deps and runs `python server.py` at start |
-| `agent/agent.py` | OpenWeatherMap key hardcoded in source | Reads `OWM_API_KEY` from the environment |
-| `frontend/index.html` | OpenWeatherMap key hardcoded and shipped to every browser; agent URLs pointed at `localhost:8080` | Weather/geocoding calls now go through `/api/weather-alerts` and `/api/geocode` (key stays server-side); agent calls use relative URLs (`/run_sse`, etc.) that work wherever the app is hosted |
-| `firebase-key.json` | Private key file, easy to accidentally commit | Not needed on Render — paste its contents into the `FIREBASE_CREDENTIALS_JSON` env var instead; `server.py` writes it to a temp file at startup. Still gitignored for local dev if you'd rather use a file there |
-| `.env.example` (new) | — | Placeholder template so you know what variables to set without any real secret in the repo |
+| Piece | Used for |
+|---|---|
+| **Gemini 2.5 Flash** (via the Gemini API) | Powers the conversational agent |
+| **Google Agent Development Kit (ADK)** | Gives the agent focused, callable tools instead of one large prompt |
+| **Google Firestore** | Real-time sync for community reports and SOS |
+| **Open-Meteo** | Free hourly precipitation history → real rain duration |
+| **OpenWeatherMap** | Live station/satellite rainfall observations |
+| **GNews API** | Live flooding-related news signal (cached server-side) |
+| **OpenStreetMap Overpass API** | Nearby hospital/facility lookup |
+| **FastAPI (Python)** | Single backend process — serves the frontend, proxies weather calls, and hosts the agent |
+| **Leaflet.js** | Interactive hotspot map |
+| **Docker + Render** | Deployment — one containerized service, one URL |
 
-## Local development
+## Architecture
+
+```
+Browser (frontend/index.html)
+   │
+   ├── /api/weather-alerts, /api/geocode, /api/current-weather  → server.py → OpenWeatherMap
+   ├── /run_sse (agent chat)                                     → server.py → ADK Agent → Gemini
+   └── Firestore (client SDK)                                    → community reports, SOS
+
+server.py (FastAPI, single process, single port)
+   ├── mounts the ADK agent (agent/agent.py)
+   ├── proxies all third-party weather/geocoding calls (keeps API keys server-side)
+   └── serves the static frontend
+
+shared/risk_model.py
+   └── the actual risk-scoring math: rainfall + duration + drainage baseline
+       + vulnerability + community-report boost (with time decay)
+```
+
+## Running it locally
 
 ```bash
 pip install -r requirements.txt
-cp .env.example agent/.env   # then fill in your own keys
-# either drop a local firebase-key.json next to server.py (gitignored),
-# or set FIREBASE_CREDENTIALS_JSON in your shell
+cp .env.example agent/.env   # then fill in your own keys — see below
 python server.py
 ```
 
-Open http://localhost:8080 — frontend and agent are both served from there.
+Open **http://localhost:8080** — the frontend, the agent chat, and all
+weather data are served from that one URL.
 
-## One more thing worth knowing
+### Environment variables
 
-The Firebase Web `apiKey` inside `frontend/index.html`'s `firebaseConfig` is
-**not** a secret in the way the others are — Firebase web API keys are
-designed to be public and are meant to be restricted by your Firestore
-Security Rules, not by hiding the key. Since anyone can currently call
-`addDoc` on `community_reports` from the browser, it's worth adding
-Firestore rules (e.g. requiring a plausible `severity` value, rate-limiting,
-or App Check) before this goes beyond a hackathon demo — just flagging it
-for a future pass, not something I've changed here.
+| Variable | Where to get it |
+|---|---|
+| `GOOGLE_API_KEY` | [Google AI Studio](https://aistudio.google.com/apikey) — powers the Gemini agent |
+| `OWM_API_KEY` | [OpenWeatherMap → API keys](https://home.openweathermap.org/api_keys) |
+| `GNEWS_API_KEY` | [gnews.io](https://gnews.io) — free tier, 100 requests/day, no card needed. Powers the news signal; without it you'll see "GNews API is not configured" |
+| `FIREBASE_CREDENTIALS_JSON` | Firebase Console → Project Settings → Service Accounts → **Generate new private key** → paste the full JSON contents as the value. (Locally you can instead drop a `firebase-key.json` file next to `server.py` — gitignored.) |
+| `GOOGLE_GENAI_USE_VERTEXAI` | Set to `FALSE` — the agent calls Gemini directly via the Gemini API, not through Vertex AI |
+
+None of these keys should ever be committed — `agent/.env` and
+`firebase-key.json` are gitignored.
+
+## Deploying to Render
+
+1. Push to GitHub.
+2. Click the **Deploy to Render** button above — Render reads `render.yaml`
+   and creates the service automatically (Docker environment).
+3. Fill in the four environment variables from the table above when Render
+   asks for them.
+4. Click **Apply**. First build takes a few minutes; after that, the Render
+   URL serves everything — frontend, agent, and weather data — from one
+   place.
+
+## A design note: honesty over polish
+
+Open-Meteo and GNews are both excellent free services, but they have daily
+quotas. The easy fix — silently fall back to a default when a call fails —
+is the wrong one for a safety tool: showing "12% risk" because an API call
+failed, instead of "we don't actually know right now," is actively
+misleading when the stakes are real.
+
+So every rainfall fetch falls back to the **last known good reading** for
+that exact spot (never a fabricated zero), and a visible banner tells the
+user plainly when live data is stale — rather than pretending everything is
+fine. The agent follows the same rule: if it can't determine real rain
+duration, it says so instead of presenting a confident number built on
+missing data.
+
+## What's next
+
+- Expanding curated ward coverage beyond Mumbai/Navi Mumbai/Thane to other
+  flood-prone Indian cities.
+- Push notifications when a saved location crosses into "High Risk."
+- Tighter agent-driven rerouting suggestions using live map data.
+
+## Security note
+
+The Firebase Web `apiKey` inside `frontend/index.html`'s `firebaseConfig`
+is **not** a secret in the way the other keys are — Firebase web API keys
+are meant to be public and are restricted by Firestore Security Rules, not
+by hiding the key. Since community reports are currently writable directly
+from the browser, adding Firestore rules (validating `severity` values,
+rate-limiting, or App Check) is worth doing before this goes beyond a
+hackathon demo.
+
+---
+
+*Built during the Google Cloud Gen AI Academy, APAC Edition — Meet the
+Builders.*
